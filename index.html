@@ -1,0 +1,531 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>theXchange — AI Library</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <!-- Simple, clean styles (white bg, black UI) -->
+    <style>
+      :root {
+        --border: #e6e6e6;
+        --muted: #6b6b6b;
+        --bg: #ffffff;
+        --text: #000000;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial, sans-serif; }
+      a { color: inherit; }
+      .container { max-width: 1120px; margin: 0 auto; padding: 16px; }
+      header, footer { border-bottom: 1px solid var(--border); }
+      footer { border-top: 1px solid var(--border); border-bottom: 0; }
+      .row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+      .logo { font-weight: 600; letter-spacing: -0.2px; user-select: none; text-decoration: none; }
+      .logo .bigx { font-size: 1.35em; font-weight: 800; vertical-align: baseline; }
+      .nav a { font-size: 14px; text-decoration: none; opacity: .9; padding: 6px 8px; border-radius: 8px; }
+      .nav a:hover { background: #f6f6f6; }
+      .card { border: 1px solid var(--border); border-radius: 14px; padding: 16px; background: #fff; }
+      .grid { display: grid; gap: 16px; }
+      @media (min-width: 768px) { .grid.cols-2 { grid-template-columns: repeat(2, 1fr); } .grid.cols-3 { grid-template-columns: repeat(3, 1fr); } .grid.cols-4 { grid-template-columns: repeat(4, 1fr); } }
+      .pill { border: 1px solid var(--border); border-radius: 999px; padding: 6px 10px; font-size: 12px; background: #fff; }
+      .btn { border: 1px solid var(--border); background: #fff; padding: 10px 14px; border-radius: 10px; cursor: pointer; font-weight: 600; }
+      .btn:hover { background: #f7f7f7; }
+      .btn.black { background: #000; color: #fff; border-color: #000; }
+      .btn.black:hover { filter: brightness(0.9); }
+      .muted { color: var(--muted); }
+      input[type="text"], input[type="email"], input[type="password"], textarea, select {
+        width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: #fff; color: #000; outline: none;
+      }
+      input::placeholder, textarea::placeholder { color: #9b9b9b; }
+      .toolbar { display:flex; gap:8px; flex-wrap: wrap; }
+      .tabs { display:flex; gap:8px; flex-wrap: wrap; }
+      .tab { padding:8px 12px; border:1px solid var(--border); border-radius:10px; background:#fff; cursor:pointer; font-weight:600; }
+      .tab.active { background:#000; color:#fff; border-color:#000; }
+      .split { display:grid; gap:16px; }
+      @media (min-width: 900px){ .split { grid-template-columns: 2fr 1fr; } }
+      .section-title { font-size: 20px; font-weight: 700; margin: 0 0 8px; }
+      .title { font-size: 28px; font-weight: 800; margin: 0; }
+      .subtitle { margin: 4px 0 0; color: var(--muted); }
+      .tool-title { font-weight: 700; margin: 0; }
+      .tool-nums { font-size: 13px; color: var(--muted); }
+      .hr { height:1px; background:var(--border); margin: 16px 0; }
+      .list { display:grid; gap:12px; }
+      .center { text-align:center; }
+      .tag { font-size: 12px; border: 1px solid var(--border); border-radius: 999px; padding: 4px 8px; }
+      .click { cursor: pointer; }
+      .inline { display: inline-flex; align-items: center; gap: 6px; }
+      .star { font-variation-settings: "FILL" 1; }
+      .link { text-decoration: underline; }
+      .toast { position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%); background:#111; color:#fff; padding:10px 14px; border-radius:10px; font-size:14px; }
+    </style>
+    <!-- React 18 UMD + Babel (for JSX in the browser so you only need one file) -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script crossorigin src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  </head>
+  <body>
+    <header>
+      <div class="container row">
+        <a href="/" class="logo" onclick="event.preventDefault()">
+          the<span class="bigx">X</span>change
+        </a>
+        <nav class="nav">
+          <a href="#discover" onclick="window._goto('home')">Discover</a>
+          <a href="#submit" onclick="window._goto('submit')">Submit an AI</a>
+          <a href="#queue" onclick="window._goto('queue')">Approval Queue</a>
+        </nav>
+      </div>
+    </header>
+    <div id="root" class="container" style="padding-top: 18px; padding-bottom: 18px;"></div>
+    <footer>
+      <div class="container" style="padding: 16px;">
+        © <span id="year"></span> the<strong>X</strong>change
+      </div>
+    </footer>
+    <script type="text/babel">
+      const { useEffect, useMemo, useState } = React;
+      // ------- Helpers & seed data (yours, slightly normalized) -------
+      const CATEGORIES = ['all','Writing','Development','Design','Video','Analytics','Audio','Marketing','Productivity'];
+      const INITIAL_TOOLS = [
+        { id: 1, name: 'ContentGenius AI', category: 'Writing', description: 'AI content creation for blogs and marketing', problem: 'writing content creating blogs social media posts', price: 29, rating: 4.8, reviews: [], users: 50234, isPremium: true, creator: 'ContentCorp', createdAt: '2024-11-15', features: ['Blog writing', 'Social posts', 'SEO optimization', 'Email copy'], affiliateUrl: 'https://example.com/contentgen?ref=thexchange' },
+        { id: 2, name: 'CodeAssist Pro', category: 'Development', description: 'AI coding assistant for 50+ languages', problem: 'coding programming debugging writing code', price: 49, rating: 4.9, reviews: [], users: 103445, isPremium: true, creator: 'DevTools', createdAt: '2024-10-20', features: ['Code completion', 'Bug detection', 'Code review', 'Documentation'], affiliateUrl: 'https://example.com/codeassist?ref=thexchange' },
+        { id: 3, name: 'DesignFlow AI', category: 'Design', description: 'Create stunning graphics and logos', problem: 'designing graphics creating logos making images', price: 19, rating: 4.7, reviews: [], users: 75892, isPremium: false, creator: 'DesignStudio', createdAt: '2025-01-05', features: ['Logo design', 'Social graphics', 'Brand kits', 'Templates'], affiliateUrl: 'https://example.com/designflow?ref=thexchange' },
+        { id: 4, name: 'VideoMaster AI', category: 'Video', description: 'AI video editing and generation', problem: 'editing videos creating videos video content', price: 39, rating: 4.6, reviews: [], users: 31267, isPremium: true, creator: 'VideoTech', createdAt: '2024-12-10', features: ['Auto editing', 'Subtitles', 'Effects', 'Video generation'], affiliateUrl: 'https://example.com/videomaster?ref=thexchange' },
+        { id: 5, name: 'DataAnalyzer Pro', category: 'Analytics', description: 'AI-powered data analysis', problem: 'analyzing data understanding data visualization', price: 79, rating: 4.9, reviews: [], users: 22156, isPremium: false, creator: 'DataWorks', createdAt: '2024-09-15', features: ['Predictive analytics', 'Data viz', 'Reports', 'AI insights'], affiliateUrl: 'https://example.com/dataanalyzer?ref=thexchange' },
+        { id: 6, name: 'VoiceClone AI', category: 'Audio', description: 'Clone and generate AI voices', problem: 'voice generation voiceovers audio content', price: 25, rating: 4.5, reviews: [], users: 42891, isPremium: false, creator: 'AudioLabs', createdAt: '2025-01-20', features: ['Voice cloning', 'Text-to-speech', 'Multiple languages'], affiliateUrl: 'https://example.com/voiceclone?ref=thexchange' },
+        { id: 7, name: 'MarketBoost AI', category: 'Marketing', description: 'AI marketing automation', problem: 'marketing advertising campaigns growing business', price: 99, rating: 4.8, reviews: [], users: 18734, isPremium: true, creator: 'MarketingPro', createdAt: '2024-11-01', features: ['Ad optimization', 'A/B testing', 'Analytics', 'Automation'], affiliateUrl: 'https://example.com/marketboost?ref=thexchange' },
+        { id: 8, name: 'TaskFlow AI', category: 'Productivity', description: 'AI task management', problem: 'productivity task management organizing work', price: 15, rating: 4.7, reviews: [], users: 67123, isPremium: false, creator: 'ProductivityCo', createdAt: '2025-01-15', features: ['Smart scheduling', 'Priority detection', 'Time tracking'], affiliateUrl: 'https://example.com/taskflow?ref=thexchange' },
+      ];
+      const getLS = (k, fallback) => {
+        try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : fallback; } catch { return fallback; }
+      };
+      const setLS = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
+      const ratingOf = (tool) => {
+        if (!tool.reviews || tool.reviews.length === 0) return Number(tool.rating || 0).toFixed(1);
+        const avg = tool.reviews.reduce((a, r) => a + (Number(r.rating) || 0), 0) / tool.reviews.length;
+        return avg.toFixed(1);
+      };
+      const sortTrending = (tools) => {
+        return [...tools].sort((a, b) => {
+          const daysA = (Date.now() - new Date(a.createdAt)) / 86400000;
+          const daysB = (Date.now() - new Date(b.createdAt)) / 86400000;
+          const sA = ((a.reviews?.length || 0) + 1) * 100 / (daysA + 1);
+          const sB = ((b.reviews?.length || 0) + 1) * 100 / (daysB + 1);
+          return sB - sA;
+        });
+      };
+      const sortPopular = (tools) => [...tools].sort((a, b) => (b.users||0)-(a.users||0));
+      const sortNew = (tools) => [...tools].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      const sortBest = (tools) => [...tools].sort((a, b) => Number(ratingOf(b)) - Number(ratingOf(a)));
+      // ------- UI Bits -------
+      const Pill = ({active, children, onClick}) => (
+        <button className={"pill"+(active?"":"")} onClick={onClick} style={active?{background:"#000",color:"#fff",borderColor:"#000"}:null}>{children}</button>
+      );
+      const ToolCard = ({ tool, onOpen }) => (
+        <div className="card click" onClick={() => onOpen(tool)}>
+          {tool.isPremium && <div className="pill" style="border-color:#ffe08a;background:#fff8d1">⭐ Premium</div>}
+          <h3 className="tool-title">{tool.name}</h3>
+          <p className="muted" style={{marginTop:6}}>{tool.description}</p>
+          <div className="row" style="margin-top:10px">
+            <div className="inline">
+              <span>★</span><strong>{ratingOf(tool)}</strong>
+              <span className="muted">({tool.reviews?.length||0})</span>
+            </div>
+            <div className="muted">{Math.round(tool.users/1000)}K+ users</div>
+          </div>
+          <div className="hr"></div>
+          <div className="row">
+            <div><span style="font-weight:800;font-size:18px">${tool.price}</span><span className="muted">/mo</span></div>
+            <button className="btn">View</button>
+          </div>
+        </div>
+      );
+      // ------- Views -------
+      function Home({ tools, setView, setSelected, categories, selectedCategory, setSelectedCategory }) {
+        const [search, setSearch] = useState('');
+        const [tab, setTab] = useState('Trending');
+        const filtered = useMemo(() => {
+          const q = search.trim().toLowerCase();
+          return tools.filter(t => {
+            const catOk = selectedCategory === 'all' || t.category === selectedCategory;
+            const hay = [t.name, t.problem, t.description, ...(t.features||[]), t.category].join(' ').toLowerCase();
+            const qOk = !q || hay.includes(q);
+            return catOk && qOk;
+          });
+        }, [tools, search, selectedCategory]);
+        const sorted = useMemo(() => {
+          if (tab==='Trending') return sortTrending(filtered);
+          if (tab==='Popular')  return sortPopular(filtered);
+          if (tab==='New')      return sortNew(filtered);
+          if (tab==='Best')     return sortBest(filtered);
+          return filtered;
+        }, [filtered, tab]);
+        return (
+          <div className="grid" style={{gap: 16}}>
+            <section className="card">
+              <h1 className="title">Discover AI tools by problem</h1>
+              <p className="subtitle">Search, compare reviews, and follow affiliate links.</p>
+              <div className="toolbar" style={{marginTop: 10}}>
+                <input type="text" placeholder='Describe your problem (e.g., "summarize legal docs")' value={search} onChange={e=>setSearch(e.target.value)} />
+                <button className="btn" onClick={()=>setSearch(search)}>Search</button>
+              </div>
+              <div className="toolbar" style="margin-top:10px; overflow-x:auto;">
+                {categories.map(cat => (
+                  <Pill key={cat} active={selectedCategory===cat} onClick={()=>setSelectedCategory(cat)}>
+                    {cat==='all'?'All Tools':cat}
+                  </Pill>
+                ))}
+              </div>
+              <div className="tabs" style="margin-top:10px">
+                {['Trending','Popular','New','Best'].map(t => (
+                  <div key={t} className={'tab'+(tab===t?' active':'')} onClick={()=>setTab(t)}>{t}</div>
+                ))}
+              </div>
+            </section>
+            <section>
+              <h2 className="section-title">{tab} {selectedCategory!=='all'?'· '+selectedCategory:''}</h2>
+              {sorted.length===0 ? (
+                <p className="muted">No results yet — try another description or category.</p>
+              ) : (
+                <div className="grid cols-3">
+                  {sorted.map(tool=>(
+                    <ToolCard key={tool.id} tool={tool} onOpen={(t)=>{ setSelected(t); setView('detail'); }} />
+                  ))}
+                </div>
+              )}
+            </section>
+          </div>
+        );
+      }
+      function Detail({ tool, onBack, onReview, markHelpful }) {
+        const avg = ratingOf(tool);
+        const reviews = [...(tool.reviews||[])].sort((a,b)=> (b.helpful||0)-(a.helpful||0));
+        return (
+          <div className="grid" style={{gap:16}}>
+            <button className="btn" onClick={onBack}>← Back</button>
+            <div className="card">
+              {tool.isPremium && <div className="pill" style="border-color:#ffe08a;background:#fff8d1">⭐ Premium Listing</div>}
+              <h1 className="title" style={{marginTop:8}}>{tool.name}</h1>
+              <p className="muted">by {tool.creator}</p>
+              <p style={{marginTop:10}}>{tool.description}</p>
+              <div className="row" style="margin-top:12px">
+                <div className="inline"><span>★</span><strong style="font-size:20px">{avg}</strong><span className="muted">({tool.reviews?.length||0} reviews)</span></div>
+                <div className="muted">{(tool.users||0).toLocaleString()}+ users</div>
+              </div>
+              <div className="hr"></div>
+              <div className="row">
+                <div><span style="font-weight:800;font-size:24px">${tool.price}</span><span className="muted">/month</span></div>
+                {tool.affiliateUrl ? (
+                  <a className="btn black" href={tool.affiliateUrl} target="_blank" rel="noopener noreferrer">Subscribe Now →</a>
+                ) : (
+                  <button className="btn black" disabled>Affiliate link missing</button>
+                )}
+              </div>
+            </div>
+            <div className="card">
+              <h2 className="section-title">Features</h2>
+              <div className="grid cols-2">
+                {(tool.features||[]).map((f,i)=>(
+                  <div key={i} className="inline"><span>⚡</span><span>{f}</span></div>
+                ))}
+              </div>
+            </div>
+            <div className="card">
+              <div className="row">
+                <h2 className="section-title">Reviews ({tool.reviews?.length||0})</h2>
+                <button className="btn" onClick={onReview}>Write Review</button>
+              </div>
+              {reviews.length===0 ? (
+                <div className="center muted" style="padding:24px 0">No reviews yet. Be the first!</div>
+              ) : (
+                <div className="list">
+                  {reviews.map(rv=>(
+                    <div key={rv.id} style="border-bottom:1px solid var(--border); padding-bottom:12px">
+                      <div className="row">
+                        <div>
+                          <div className="inline">
+                            <strong>{rv.userName}</strong>
+                            <div>
+                              {'★'.repeat(rv.rating)}{'☆'.repeat(5-rv.rating)}
+                            </div>
+                          </div>
+                          <div className="muted" style="font-size:12px">{new Date(rv.createdAt).toLocaleDateString()}</div>
+                        </div>
+                        {rv.helpful>0 && <div className="muted inline">👍 {rv.helpful}</div>}
+                      </div>
+                      <p style="margin-top:8px">{rv.text}</p>
+                      <button className="btn" onClick={()=>markHelpful(tool.id, rv.id)} style="margin-top:6px">Helpful</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      }
+      function Submit({ submit }) {
+        const [form, setForm] = useState({ name:'', problem:'', description:'', affiliateUrl:'', price:'', category:'Writing', features:'', creator:'' });
+        const onChange = (e)=> setForm(f=>({...f,[e.target.name]:e.target.value}));
+        const onSubmit = (e)=>{ e.preventDefault(); submit(form); };
+        return (
+          <div className="grid" style={{gap:16}}>
+            <h1 className="title">Submit an AI</h1>
+            <form className="card grid" style={{gap:10}} onSubmit={onSubmit}>
+              <input name="name" placeholder="AI name" required value={form.name} onChange={onChange} />
+              <input name="creator" placeholder="Creator / Company" required value={form.creator} onChange={onChange} />
+              <select name="category" value={form.category} onChange={onChange}>
+                {CATEGORIES.filter(c=>c!=='all').map(c=><option key={c} value={c}>{c}</option>)}
+              </select>
+              <input name="price" type="number" placeholder="Price per month (e.g., 29)" required value={form.price} onChange={onChange} />
+              <input name="affiliateUrl" placeholder="Affiliate URL (optional)" value={form.affiliateUrl} onChange={onChange} />
+              <input name="problem" placeholder="Problem it solves (keywords)" required value={form.problem} onChange={onChange} />
+              <textarea name="description" placeholder="Short description" rows="4" required value={form.description} onChange={onChange} />
+              <input name="features" placeholder="Features (comma-separated)" value={form.features} onChange={onChange} />
+              <button className="btn" type="submit">Submit for Approval</button>
+            </form>
+            <p className="muted">Submissions go to the Approval Queue. Only the approver can publish them.</p>
+          </div>
+        );
+      }
+      function Queue({ pending, approve, reject }) {
+        return (
+          <div className="grid" style={{gap:16}}>
+            <h1 className="title">Approval Queue</h1>
+            {pending.length===0 ? (
+              <p className="muted">No pending submissions.</p>
+            ) : (
+              <div className="grid cols-2">
+                {pending.map(p=>(
+                  <div key={p.id} className="card">
+                    <div className="row">
+                      <h3 className="tool-title">{p.name}</h3>
+                      <span className="pill">{p.category}</span>
+                    </div>
+                    <p className="muted" style="margin-top:6px">{p.description}</p>
+                    <div className="hr"></div>
+                    <div className="grid" style="gap:8px">
+                      <div><strong>Creator:</strong> {p.creator||'—'}</div>
+                      <div><strong>Price:</strong> ${p.price||'—'}/mo</div>
+                      {p.affiliateUrl && <div><a className="link" href={p.affiliateUrl} target="_blank" rel="noopener">Affiliate Link</a></div>}
+                      <div><strong>Features:</strong> {(p.features||[]).join(', ')||'—'}</div>
+                    </div>
+                    <div className="row" style="margin-top:12px">
+                      <button className="btn" onClick={()=>reject(p.id)}>Reject</button>
+                      <button className="btn black" onClick={()=>approve(p.id)}>Approve</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      }
+      function Auth({ user, setUser }) {
+        const [mode, setMode] = useState('login');
+        const [form, setForm] = useState({ email:'', password:'', name:'', role:'user' });
+        const onChange = (e)=> setForm(f=>({...f,[e.target.name]:e.target.value}));
+        const login = (e)=>{
+          e.preventDefault();
+          const u = { id: Date.now(), name: form.email.split('@')[0], email: form.email, role: 'user', joinedAt: new Date().toISOString() };
+          localStorage.setItem('thexchange_user', JSON.stringify(u));
+          setUser(u);
+        };
+        const signup = (e)=>{
+          e.preventDefault();
+          const u = { id: Date.now(), name: form.name || form.email.split('@')[0], email: form.email, role: form.role, joinedAt: new Date().toISOString() };
+          localStorage.setItem('thexchange_user', JSON.stringify(u));
+          setUser(u);
+          if (u.role==='approver') toast('Approver mode granted to this account.');
+        };
+        return (
+          <div className="card">
+            <div className="row">
+              <h2 className="section-title">{mode==='login'?'Welcome Back':'Join theXchange'}</h2>
+              <button className="btn" onClick={()=>setMode(mode==='login'?'signup':'login')}>
+                {mode==='login' ? 'Create account' : 'Have an account? Sign in'}
+              </button>
+            </div>
+            <form className="grid" style={{gap:10}} onSubmit={mode==='login'?login:signup}>
+              {mode==='signup' && (
+                <>
+                  <input name="name" placeholder="Full name" value={form.name} onChange={onChange} />
+                  <div>
+                    <label className="muted" style="font-size:12px">Account Type</label>
+                    <div className="toolbar" style="margin-top:6px">
+                      <button type="button" className={"btn"+(form.role==='user'?'':'')} onClick={()=>setForm(f=>({...f,role:'user'}))}>User</button>
+                      <button type="button" className={"btn"+(form.role==='approver'?' black':'')} onClick={()=>setForm(f=>({...f,role:'approver'}))}>Approver</button>
+                    </div>
+                  </div>
+                </>
+              )}
+              <input name="email" type="email" required placeholder="you@example.com" value={form.email} onChange={onChange} />
+              <input name="password" type="password" required placeholder="••••••••" value={form.password} onChange={onChange} />
+              <button className="btn black" type="submit">{mode==='login'?'Sign In':'Create Account'}</button>
+            </form>
+          </div>
+        );
+      }
+      // ------- App -------
+      function App() {
+        const [view, setView] = useState('home');           // 'home' | 'detail' | 'submit' | 'queue'
+        const [selected, setSelected] = useState(null);
+        const [user, setUser] = useState(null);
+        const [tools, setTools] = useState(()=> getLS('thexchange_tools', null) || (setLS('thexchange_tools', INITIAL_TOOLS), INITIAL_TOOLS));
+        const [pending, setPending] = useState(()=> getLS('thexchange_pending', []));
+        const [category, setCategory] = useState('all');
+        useEffect(()=>{ setLS('thexchange_tools', tools); }, [tools]);
+        useEffect(()=>{ setLS('thexchange_pending', pending); }, [pending]);
+        useEffect(()=>{ document.getElementById('year').textContent = String(new Date().getFullYear()); }, []);
+        useEffect(()=>{ const saved = getLS('thexchange_user', null); if (saved) setUser(saved); }, []);
+        // Global navigation helper for header links
+        window._goto = (v)=> setView(v);
+        const approve = (id)=>{
+          const p = pending.find(x=>x.id===id);
+          if (!p) return;
+          const tool = {
+            id: tools.length ? Math.max(...tools.map(t=>t.id))+1 : 1,
+            name: p.name,
+            category: p.category,
+            description: p.description,
+            problem: p.problem || '',
+            price: Number(p.price||0),
+            rating: 4.5,
+            reviews: [],
+            users: Math.floor(1000+Math.random()*50000),
+            isPremium: false,
+            creator: p.creator || 'Unknown',
+            createdAt: new Date().toISOString().slice(0,10),
+            features: p.features || [],
+            affiliateUrl: p.affiliateUrl || '',
+          };
+          setTools(ts=>[tool, ...ts]);
+          setPending(ps=>ps.filter(x=>x.id!==id));
+          toast('Approved & published.');
+        };
+        const reject = (id)=>{
+          setPending(ps=>ps.filter(x=>x.id!==id));
+          toast('Rejected.');
+        };
+        const submit = (form)=>{
+          const sub = {
+            id: Date.now(),
+            name: form.name.trim(),
+            problem: form.problem.trim(),
+            description: form.description.trim(),
+            affiliateUrl: (form.affiliateUrl||'').trim(),
+            price: form.price,
+            category: form.category,
+            features: (form.features||'').split(',').map(s=>s.trim()).filter(Boolean),
+            creator: (form.creator||'').trim(),
+            createdAt: new Date().toISOString(),
+          };
+          setPending(ps=>[sub, ...ps]);
+          setView('queue'); // send you to queue after submit
+          toast('Submission sent to Approval Queue.');
+        };
+        const addReview = (toolId, userObj, review) => {
+          setTools(ts => ts.map(t => {
+            if (t.id !== toolId) return t;
+            const rv = { id: Date.now(), userId: userObj.id, userName: userObj.name, rating: review.rating, text: review.text, createdAt: new Date().toISOString(), helpful: 0 };
+            return { ...t, reviews: [...(t.reviews||[]), rv] };
+          }));
+          toast('Review added.');
+        };
+        const markHelpful = (toolId, reviewId) => {
+          setTools(ts => ts.map(t => {
+            if (t.id !== toolId) return t;
+            return { ...t, reviews: t.reviews.map(r => r.id===reviewId ? { ...r, helpful: (r.helpful||0)+1 } : r ) };
+          }));
+        };
+        const [showReview, setShowReview] = useState(false);
+        const [reviewForm, setReviewForm] = useState({ rating: 5, text: '' });
+        const canApprove = user && user.role === 'approver';
+        return (
+          <div className="grid" style={{gap:16}}>
+            {/* Auth or user strip */}
+            <div className="row">
+              {user ? (
+                <div className="inline">
+                  <span className="muted">Hi, {user.name}!</span>
+                  <button className="btn" onClick={()=>{ localStorage.removeItem('thexchange_user'); setUser(null); }}>Log out</button>
+                  {canApprove ? <span className="pill">Approver</span> : null}
+                </div>
+              ) : (
+                <Auth user={user} setUser={setUser} />
+              )}
+            </div>
+            {/* Views */}
+            {view==='home' && (
+              <Home
+                tools={tools}
+                setView={setView}
+                setSelected={setSelected}
+                categories={CATEGORIES}
+                selectedCategory={category}
+                setSelectedCategory={setCategory}
+              />
+            )}
+            {view==='detail' && selected && (
+              <>
+                <Detail
+                  tool={selected}
+                  onBack={()=>setView('home')}
+                  onReview={()=>{
+                    if (!user) { toast('Please sign in to write a review.'); return; }
+                    setShowReview(true);
+                  }}
+                  markHelpful={markHelpful}
+                />
+                {showReview && (
+                  <div className="card">
+                    <h3 className="section-title">Write a Review</h3>
+                    <div className="toolbar">
+                      <label>Rating:</label>
+                      <select value={reviewForm.rating} onChange={e=>setReviewForm(f=>({...f, rating: Number(e.target.value)}))}>
+                        {[1,2,3,4,5].map(n=><option key={n} value={n}>{n}</option>)}
+                      </select>
+                    </div>
+                    <textarea rows="4" placeholder="Share your experience..." value={reviewForm.text} onChange={e=>setReviewForm(f=>({...f, text:e.target.value}))}></textarea>
+                    <div className="toolbar">
+                      <button className="btn" onClick={()=>setShowReview(false)}>Cancel</button>
+                      <button className="btn black" onClick={()=>{
+                        if (!reviewForm.text.trim()) { toast('Please write a few words.'); return; }
+                        addReview(selected.id, user, reviewForm);
+                        setSelected(tools.find(t=>t.id===selected.id));
+                        setShowReview(false);
+                        setReviewForm({ rating: 5, text: '' });
+                      }}>Submit Review</button>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+            {view==='submit' && <Submit submit={submit} />}
+            {view==='queue' && (
+              canApprove ? <Queue pending={pending} approve={approve} reject={reject} />
+                         : <div className="card"><p className="muted">Only the Approver can view the Approval Queue. Create an account with role “Approver” above.</p></div>
+            )}
+          </div>
+        );
+      }
+      // ------- tiny toast helper -------
+      let toastTimer = null;
+      function toast(msg) {
+        clearTimeout(toastTimer);
+        let el = document.getElementById('toast');
+        if (!el) {
+          el = document.createElement('div');
+          el.id = 'toast';
+          el.className = 'toast';
+          document.body.appendChild(el);
+        }
+        el.textContent = msg;
+        el.style.display = 'block';
+        toastTimer = setTimeout(()=>{ el.style.display='none'; }, 1800);
+      }
+      // ------- Render -------
+      const root = ReactDOM.createRoot(document.getElementById('root'));
+      root.render(<App />);
+    </script>
+  </body>
+</html>
+
