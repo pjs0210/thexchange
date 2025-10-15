@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>theXchange — Find Your AI</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="assets/styles.css" />
+</head>
+<body data-page="home">
+  <header class="site-header">
+    <div class="container row">
+      <a href="index.html" class="logo">the<span class="bigx">X</span>change</a>
+      <nav class="nav">
+        <a href="index.html">Home</a>
+        <a href="submit.html">Submit an AI</a>
+        <a href="queue.html">Approval Queue</a>
+        <a href="signup.html" id="accountLink">Sign Up / Sign In</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="hero card">
+      <h1>Find Your Perfect AI Tool</h1>
+      <p>Browse, search, and review AI tools from creators around the world.</p>
+      <div class="searchbar">
+        <input id="searchInput" type="text" placeholder="Describe your problem (e.g., 'writing blog posts', 'debugging code')"/>
+      </div>
+    </section>
+
+    <section class="tabs">
+      <button class="tab active" data-tab="trending">Trending</button>
+      <button class="tab" data-tab="popular">Popular</button>
+      <button class="tab" data-tab="new">New</button>
+    </section>
+
+    <section id="cards" class="grid cols-3"></section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">© <span id="year"></span> the<strong>X</strong>change</div>
+  </footer>
+
+  <script src="assets/app.js"></script>
+</body>
+</html>

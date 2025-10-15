@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>theXchange — Tool</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="assets/styles.css" />
+</head>
+<body data-page="tool">
+  <header class="site-header">
+    <div class="container row">
+      <a href="index.html" class="logo">the<span class="bigx">X</span>change</a>
+      <nav class="nav">
+        <a href="index.html">Home</a>
+        <a href="submit.html">Submit an AI</a>
+        <a href="queue.html">Approval Queue</a>
+        <a href="signup.html" id="accountLink">Account</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+    <section id="toolDetail" class="card"></section>
+
+    <section class="card">
+      <h3>Leave a Review</h3>
+      <form id="reviewForm" class="stack">
+        <label>Rating
+          <select name="rating">
+            <option>5</option><option>4</option><option>3</option><option>2</option><option>1</option>
+          </select>
+        </label>
+        <label>Your review <textarea name="text" rows="3" required></textarea></label>
+        <button class="btn" type="submit">Submit Review</button>
+      </form>
+      <p class="muted">You must be signed in to review.</p>
+    </section>
+
+    <section class="card">
+      <h3>Reviews</h3>
+      <div id="reviewsList" class="list"></div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">© <span id="year"></span> the<strong>X</strong>change</div>
+  </footer>
+
+  <script src="assets/app.js"></script>
+</body>
+</html>
+
+
+

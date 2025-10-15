@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>theXchange — Submit an AI</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="assets/styles.css" />
+</head>
+<body data-page="submit">
+  <header class="site-header">
+    <div class="container row">
+      <a href="index.html" class="logo">the<span class="bigx">X</span>change</a>
+      <nav class="nav">
+        <a href="index.html">Home</a>
+        <a href="submit.html">Submit an AI</a>
+        <a href="queue.html">Approval Queue</a>
+        <a href="signup.html" id="accountLink">Account</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="card">
+      <h2>Submit an AI Tool</h2>
+      <form id="submitForm" class="stack">
+        <label>Name <input name="name" required /></label>
+        <label>Category
+          <select name="category">
+            <option>Writing</option><option>Development</option><option>Design</option>
+            <option>Video</option><option>Analytics</option><option>Audio</option>
+            <option>Marketing</option><option>Productivity</option>
+          </select>
+        </label>
+        <label>Description <textarea name="description" rows="3" required></textarea></label>
+        <label>Problem keywords (comma separated) <input name="problem" placeholder="writing, blogging, SEO" /></label>
+        <label>Monthly price (USD) <input name="price" type="number" min="0" value="0" /></label>
+        <label>Affiliate URL (optional) <input name="affiliateUrl" placeholder="https://partner.com/your-ref" /></label>
+        <button class="btn black" type="submit">Submit for Approval</button>
+      </form>
+      <p class="muted" style="margin-top:8px;">Submissions appear in the Approval Queue. Approver accounts can approve/reject.</p>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">© <span id="year"></span> the<strong>X</strong>change</div>
+  </footer>
+
+  <script src="assets/app.js"></script>
+</body>
+</html>
+
+
+

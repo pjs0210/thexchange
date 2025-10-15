@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>theXchange — Account</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="assets/styles.css" />
+</head>
+<body data-page="signup">
+  <header class="site-header">
+    <div class="container row">
+      <a href="index.html" class="logo">the<span class="bigx">X</span>change</a>
+      <nav class="nav">
+        <a href="index.html">Home</a>
+        <a href="submit.html">Submit an AI</a>
+        <a href="queue.html">Approval Queue</a>
+        <a href="signup.html" id="accountLink">Account</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container split">
+    <section class="card">
+      <h2>Create Account</h2>
+      <form id="signupForm" class="stack">
+        <label>Full Name <input name="name" required /></label>
+        <label>Email <input type="email" name="email" required /></label>
+        <label>Password <input type="password" name="password" required /></label>
+        <label>Account Type
+          <select name="accountType">
+            <option value="user">User</option>
+            <option value="approver">Approver</option>
+          </select>
+        </label>
+        <button class="btn black" type="submit">Create Account</button>
+      </form>
+    </section>
+
+    <section class="card">
+      <h2>Sign In</h2>
+      <form id="signinForm" class="stack">
+        <label>Email <input type="email" name="email" required /></label>
+        <label>Password <input type="password" name="password" required /></label>
+        <button class="btn" type="submit">Sign In</button>
+      </form>
+      <button id="logoutBtn" class="btn danger" style="display:none; margin-top:8px;">Log Out</button>
+      <p id="signedInAs" class="muted" style="margin-top:8px;"></p>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">© <span id="year"></span> the<strong>X</strong>change</div>
+  </footer>
+
+  <script src="assets/app.js"></script>
+</body>
+</html>
+
