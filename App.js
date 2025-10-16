@@ -3,7 +3,7 @@
    =============================== */
 
 /** <<< SET TO YOUR EMAIL >>> **/
-const ADMIN_EMAIL = "pjsalinari0210@gmail.com";
+const ADMIN_EMAIL = "thexchangeceo@gmail.com";
 
 /* LocalStorage keys */
 const LS_USER    = "thex_user";
@@ -347,4 +347,5 @@ document.addEventListener("DOMContentLoaded", ()=>{
   const authForm = byId("authForm");
   if (page === "signup" && authForm) authForm.addEventListener("submit", handleSignupLogin);
 });
+
 
