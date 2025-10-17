@@ -18,8 +18,24 @@
     <a href="signup.html">Sign In</a>
   </nav>
 
-  <!-- The JS writes the search bar + sections into this element -->
+  <!-- Fallback search (pure HTML; shows even if JS fails) -->
+  <section class="container" id="fallbackSearch">
+    <div class="search-wrap">
+      <input id="searchInput" class="search-input" placeholder="Search by name, category, or problem..." />
+    </div>
+  </section>
+
+  <!-- JS will fill sections below; if JS fails, you'll just see the search above -->
   <main id="homeSections" class="container"></main>
+
+  <!-- Tiny inline watchdog: if app.js doesn't draw, keep fallback visible -->
+  <script>
+    window.__thexBoot = { drew:false };
+    window.addEventListener('load', () => {
+      // if app.js draws, it will hide/remove fallback; if not, this remains visible
+      console.log('[theXchange] page loaded; waiting for app.js to render…');
+    });
+  </script>
 
   <!-- Load your app code last -->
   <script src="app.js"></script>

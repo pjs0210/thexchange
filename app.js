@@ -1,3 +1,27 @@
+// --- SAFETY BOOT: force the search bar to render on home immediately ---
+document.addEventListener("DOMContentLoaded", () => {
+  const page = document.body.getAttribute("data-page");
+  const mount = document.getElementById("homeSections");
+  const fallback = document.getElementById("fallbackSearch");
+
+  if (page === "home" && mount) {
+    // Always render a search header + placeholder container
+    mount.innerHTML = `
+      <section class="container">
+        <div class="search-wrap">
+          <input id="searchInput" class="search-input" placeholder="Search by name, category, or problem..." />
+        </div>
+      </section>
+      <section class="container"><div id="homeAutoSections"></div></section>
+    `;
+    // Hide fallback if it exists (we drew successfully)
+    if (fallback) fallback.style.display = 'none';
+    window.__thexBoot = window.__thexBoot || {};
+    window.__thexBoot.drew = true;
+    console.log('[theXchange] safety boot drew search bar');
+  }
+});
+
 
 /* ===============================
    theXchange — Frontend (no backend)
