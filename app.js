@@ -15,7 +15,6 @@ const FEATURED_PAYMENT_LINK = "https://buy.stripe.com/test_00wcN66VafheeLn2ABdIA
 
 /** Approved affiliate hosts (NO Gumroad, NO Impact if you’re skipping it for now) */
 const APPROVED_AFFILIATE_HOSTS = [
-  "partnerstack.com",
   "shareasale.com",
   "clickbank.net",
   "lemonsqueezy.com",
@@ -210,7 +209,7 @@ function handleSubmitAI(e){
     return;
   }
   if (!affiliateHostIsApproved(affiliateUrl, affiliatePlatform)){
-    alert("Affiliate link must come from the selected approved platform (PartnerStack, ShareASale, ClickBank, Lemon Squeezy Affiliates, or Paddle Affiliates).");
+    alert("Affiliate link must come from the selected approved platform (ShareASale, ClickBank, Lemon Squeezy Affiliates, or Paddle Affiliates).");
     return;
   }
 
