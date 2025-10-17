@@ -1,23 +1,33 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>TheXchange — Submit</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="assetsstyle.css" />
 </head>
 <body data-page="submit">
+  <!-- Top nav -->
   <nav class="nav">
+    <div class="brand">
+      <div class="brand-badge">x</div>
+      <strong>theXchange</strong>
+    </div>
     <a href="index.html">Home</a>
-    <a href="submit.html">Submit an AI</a>
-    <a href="signup.html">Sign Up</a>
+    <a href="submit.html" aria-current="page">Submit an AI</a>
+    <a href="signup.html">Sign In</a>
   </nav>
 
   <main class="container">
     <h1>Submit an AI</h1>
-    <p class="muted">one sentence description only. include a link, and (optional) image url.</p>
+    <p class="muted">
+      One-sentence description only. Featured listings show above others for 30 days.
+    </p>
 
     <form id="submitForm" class="form">
+      <!-- Basic info -->
       <label>Tool name
         <input id="toolName" placeholder="Tool name" required />
       </label>
@@ -27,14 +37,19 @@
       </label>
 
       <label>One-sentence description
-        <input id="toolDescription" placeholder="One sentence only" required />
+        <input id="toolDescription" placeholder="One sentence only" maxlength="140" required />
       </label>
 
+      <label>Problem keywords (optional — comma separated)
+        <input id="toolProblem" placeholder="podcast editing, logo design, lead gen" />
+      </label>
+
+      <!-- Pricing -->
       <div class="row gap">
         <label>Price type
           <select id="toolPriceType">
             <option value="free">Free</option>
-            <option value="paid">Paid</option>
+            <option value="paid" selected>Paid</option>
           </select>
         </label>
 
@@ -43,23 +58,119 @@
         </label>
       </div>
 
-      <label>Link to the tool
-        <input id="toolUrl" type="url" placeholder="https://example.com" required />
+      <!-- Monetization policy (important!) -->
+      <div class="empty-state">
+        <strong>Listing policy</strong>
+        <ul style="margin:8px 0 0 16px;">
+          <li><strong>All submissions MUST include a valid affiliate/referral link.</strong></li>
+          <li>Only supported payment systems are accepted for listings: <em>Stripe, Paddle, Lemon Squeezy</em>.</li>
+          <li>Affiliate links must come from <em>approved affiliate platforms</em> below.</li>
+          <li>If you can’t provide a valid affiliate link, choose <strong>Featured (Paid)</strong> instead.</li>
+        </ul>
+      </div>
+
+      <!-- Payment system -->
+      <label>Where is your AI sold/hosted?
+        <select id="paymentSystem" required>
+          <option value="">Select a payment system…</option>
+          <option value="stripe">Stripe</option>
+          <option value="paddle">Paddle</option>
+          <option value="lemonsqueezy">Lemon Squeezy</option>
+        </select>
       </label>
 
+      <!-- Affiliate platform -->
+      <label>Affiliate / referral platform (link must match)
+        <select id="affiliatePlatform" required>
+          <option value="">Select a platform…</option>
+          <option value="partnerstack.com">PartnerStack</option>
+          <option value="shareasale.com">ShareASale</option>
+          <option value="clickbank.net">ClickBank</option>
+          <option value="lemonsqueezy.com">Lemon Squeezy Affiliates</option>
+          <option value="paddle.com">Paddle Affiliates</option>
+        </select>
+      </label>
+
+      <!-- Required affiliate link -->
+      <label>Affiliate link (REQUIRED)
+        <input id="affiliateUrl" type="url" placeholder="https://…(must be from selected platform)" required />
+        <small class="muted">Examples: partnerstack.com/…, shareasale.com/…, clickbank.net/…, lemonsqueezy.com/?aff=…, paddle.com/checkout…?ref=…</small>
+      </label>
+
+      <!-- Image -->
       <label>Image URL (optional)
-        <input id="toolImageUrl" type="url" placeholder="https://..." />
+        <input id="toolImageUrl" type="url" placeholder="https://…" />
       </label>
 
-      <button class="btn primary">Submit</button>
+      <!-- Listing type (Free vs Featured) -->
+      <label>Listing type
+        <select id="listingType">
+          <option value="free">Free (affiliate link required)</option>
+          <option value="featured">Featured (Paid)</option>
+        </select>
+      </label>
+
+      <!-- Featured payment block -->
+      <div id="paidBlock" class="form" style="display:none;">
+        <div class="row between">
+          <p class="muted">
+            Purchase your Featured listing using one of the supported payment methods:<br>
+            <strong>Stripe, Apple Pay, Google Pay.</strong><br><br>
+            After payment, enter the <strong>email used at checkout</strong> below so we can verify and approve your listing.
+          </p>
+          <button id="payFeaturedBtn" class="btn primary" type="button">Pay for Featured</button>
+        </div>
+
+        <label>Payment email (required for Featured)
+          <input id="paymentEmail" type="email" placeholder="email used at checkout" />
+        </label>
+      </div>
+
+      <button id="submitBtn" class="btn primary">Submit</button>
     </form>
   </main>
 
   <script src="app.js"></script>
+
+  <!-- Tiny helper to show/hide the Featured block & disable submit if needed -->
+  <script>
+    (function () {
+      const listingType   = document.getElementById('listingType');
+      const paymentEmail  = document.getElementById('paymentEmail');
+      const submitBtn     = document.getElementById('submitBtn') || document.querySelector('button[type="submit"]');
+      const paidBlock     = document.getElementById('paidBlock');
+      const platformSel   = document.getElementById('affiliatePlatform');
+      const affiliateUrl  = document.getElementById('affiliateUrl');
+
+      function togglePaidUI() {
+        const isFeatured = listingType && listingType.value === 'featured';
+        if (paidBlock) paidBlock.style.display = isFeatured ? 'grid' : 'none';
+        if (submitBtn) {
+          if (isFeatured) {
+            const filled = paymentEmail && paymentEmail.value.trim().length > 0;
+            submitBtn.disabled = !filled;
+          } else {
+            submitBtn.disabled = false;
+          }
+        }
+      }
+
+      function enforceAffiliateHint() {
+        if (platformSel && affiliateUrl && platformSel.value) {
+          const host = platformSel.value;
+          if (affiliateUrl.value.trim() === "") {
+            affiliateUrl.placeholder = `https://….${host}/your-partner-link`;
+          }
+        }
+      }
+
+      if (listingType) listingType.addEventListener('change', () => { togglePaidUI(); });
+      if (paymentEmail) paymentEmail.addEventListener('input', togglePaidUI);
+      if (platformSel) platformSel.addEventListener('change', enforceAffiliateHint);
+
+      togglePaidUI();
+      enforceAffiliateHint();
+    })();
+  </script>
 </body>
 </html>
-
-
-
-
-

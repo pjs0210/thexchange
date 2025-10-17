@@ -1,17 +1,22 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>TheXchange — Home</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="assetsstyle.css" />
 </head>
 <body data-page="home">
   <nav class="nav">
+    <div class="brand">
+      <div class="brand-badge">x</div>
+      <strong>theXchange</strong>
+    </div>
     <a href="index.html">Home</a>
     <a href="submit.html">Submit an AI</a>
-    <a href="signup.html">Sign Up</a>
-    <!-- queue.html is NOT linked in the nav on purpose -->
+    <a href="signup.html">Sign In</a>
   </nav>
 
   <header class="hero">
@@ -19,13 +24,17 @@
     <p>discover, review, and share ai tools</p>
   </header>
 
-  <main class="container">
-    <div id="toolsGrid" class="grid"></div>
-  </main>
+  <!-- Home sections render here -->
+  <div id="homeSections"></div>
 
   <script src="app.js"></script>
 </body>
 </html>
+
+
+
+
+
 
 
 
