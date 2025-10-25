@@ -10,7 +10,7 @@
    ========================================================= */
 
 /* =============== CONFIG =============== */
-const APPROVER_EMAIL = "pjsalinari0210@gmail.com"; // you are the admin
+const APPROVER_EMAIL = "thexchangeceo@gmail.com"; // you are the admin
 const ALLOWED_PAYMENT_PLATFORMS = ["Stripe", "Paddle", "Lemon Squeezy", "ShareASale"]; // submit page dropdown
 
 /* =============== STORAGE HELPERS =============== */
@@ -674,4 +674,5 @@ document.addEventListener("DOMContentLoaded", () => {
   renderHome();
   initToolPage();
 });
+
 
