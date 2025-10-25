@@ -1,646 +1,677 @@
-// --- SAFETY BOOT: force the search bar to render on home immediately ---
-document.addEventListener("DOMContentLoaded", () => {
-  const page = document.body.getAttribute("data-page");
-  const mount = document.getElementById("homeSections");
-  const fallback = document.getElementById("fallbackSearch");
+/* =========================================================
+   TheXchange - App JS (Front-end only / localStorage)
+   Features:
+   - Auth (signup/signin) with localStorage
+   - Approver role (admin) by email
+   - Submit AI (requires allowed payment platform + affiliate link)
+   - Approvals (admin only)
+   - Home page: Search + Trending/Popular/New
+   - Tool detail: Reviews
+   ========================================================= */
 
-  if (page === "home" && mount) {
-    // Always render a search header + placeholder container
-    mount.innerHTML = `
-      <section class="container">
-        <div class="search-wrap">
-          <input id="searchInput" class="search-input" placeholder="Search by name, category, or problem..." />
-        </div>
-      </section>
-      <section class="container"><div id="homeAutoSections"></div></section>
+/* =============== CONFIG =============== */
+const APPROVER_EMAIL = "pjsalinari0210@gmail.com"; // you are the admin
+const ALLOWED_PAYMENT_PLATFORMS = ["Stripe", "Paddle", "Lemon Squeezy", "ShareASale"]; // submit page dropdown
+
+/* =============== STORAGE HELPERS =============== */
+function getUsers() {
+  try { return JSON.parse(localStorage.getItem("tx_users") || "[]"); } catch { return []; }
+}
+function saveUsers(list) {
+  localStorage.setItem("tx_users", JSON.stringify(list));
+}
+function getCurrentUser() {
+  try { return JSON.parse(localStorage.getItem("tx_current_user") || "null"); } catch { return null; }
+}
+function setCurrentUser(user) {
+  if (user) localStorage.setItem("tx_current_user", JSON.stringify(user));
+  else localStorage.removeItem("tx_current_user");
+}
+
+function getTools() {
+  try { return JSON.parse(localStorage.getItem("tx_tools") || "[]"); } catch { return []; }
+}
+function saveTools(list) {
+  localStorage.setItem("tx_tools", JSON.stringify(list));
+}
+
+/* =============== SEED EXAMPLE TOOLS (one-time) =============== */
+function maybeSeedTools() {
+  const existing = getTools();
+  if (existing && existing.length) return;
+
+  const now = new Date();
+  const daysAgo = (d) => new Date(now.getTime() - d*86400000).toISOString();
+
+  const seed = [
+    {
+      id: Date.now()+1,
+      name: "ContentGenius AI",
+      category: "Writing",
+      description: "AI content creation for blogs and marketing",
+      problem: "writing content creating blogs social media posts",
+      priceType: "paid",
+      price: 29,
+      rating: 4.8,
+      users: 50234,
+      isPremium: true,
+      creator: "ContentCorp",
+      createdAt: daysAgo(90),
+      features: ["Blog writing","Social posts","SEO optimization","Email copy"],
+      imageUrl: "",
+      url: "#",
+      paymentPlatform: "Stripe",
+      affiliateLink: "#",
+      isExample: true,
+      status: "approved", // examples appear
+      reviews: []
+    },
+    {
+      id: Date.now()+2,
+      name: "CodeAssist Pro",
+      category: "Development",
+      description: "AI coding assistant for 50+ languages",
+      problem: "coding programming debugging writing code",
+      priceType: "paid",
+      price: 49,
+      rating: 4.9,
+      users: 103445,
+      isPremium: true,
+      creator: "DevTools",
+      createdAt: daysAgo(120),
+      features: ["Code completion","Bug detection","Code review","Documentation"],
+      imageUrl: "",
+      url: "#",
+      paymentPlatform: "Paddle",
+      affiliateLink: "#",
+      isExample: true,
+      status: "approved",
+      reviews: []
+    },
+    {
+      id: Date.now()+3,
+      name: "DesignFlow AI",
+      category: "Design",
+      description: "Create stunning graphics and logos",
+      problem: "designing graphics creating logos making images",
+      priceType: "paid",
+      price: 19,
+      rating: 4.7,
+      users: 75892,
+      isPremium: false,
+      creator: "DesignStudio",
+      createdAt: daysAgo(20),
+      features: ["Logo design","Social graphics","Brand kits","Templates"],
+      imageUrl: "",
+      url: "#",
+      paymentPlatform: "Lemon Squeezy",
+      affiliateLink: "#",
+      isExample: true,
+      status: "approved",
+      reviews: []
+    },
+    {
+      id: Date.now()+4,
+      name: "TaskFlow AI",
+      category: "Productivity",
+      description: "AI task management",
+      problem: "productivity task management organizing work",
+      priceType: "paid",
+      price: 15,
+      rating: 4.7,
+      users: 67123,
+      isPremium: false,
+      creator: "ProductivityCo",
+      createdAt: daysAgo(10),
+      features: ["Smart scheduling","Priority detection","Time tracking"],
+      imageUrl: "",
+      url: "#",
+      paymentPlatform: "ShareASale",
+      affiliateLink: "#",
+      isExample: true,
+      status: "approved",
+      reviews: []
+    }
+  ];
+
+  saveTools(seed);
+}
+
+/* =============== NAV AUTH (Hi, Name / Logout / Sign In) =============== */
+function renderNavAuth() {
+  const slot = document.getElementById("navAuth");
+  if (!slot) return;
+  const u = getCurrentUser();
+  if (u) {
+    slot.innerHTML = `
+      <span style="margin-left:8px;">Hi, ${u.name || u.email.split("@")[0]}${u.role==="admin" ? " (approver)" : ""}</span>
+      <button id="logoutBtn" class="btn outline" style="margin-left:8px;">Logout</button>
     `;
-    // Hide fallback if it exists (we drew successfully)
-    if (fallback) fallback.style.display = 'none';
-    window.__thexBoot = window.__thexBoot || {};
-    window.__thexBoot.drew = true;
-    console.log('[theXchange] safety boot drew search bar');
-  }
-});
-
-
-/* ===============================
-   theXchange — Frontend (no backend)
-   Enforces affiliate link for ALL submissions
-   =============================== */
-
-/** <<< SET YOUR ADMIN EMAIL (approver) >>> **/
-const ADMIN_EMAIL = "thexchangeceo@gmail.com";
-
-/** <<< SET YOUR STRIPE PAYMENT LINK FOR FEATURED LISTINGS >>> **
- * Create this in Stripe: Product "Featured Listing (30 days)" -> Payment Link
- * Replace the placeholder below with your real link (test first; then live).
- */
-const FEATURED_PAYMENT_LINK = "https://buy.stripe.com/test_00wcN66VafheeLn2ABdIA00";
-
-/** Approved affiliate hosts (NO Gumroad, NO Impact if you’re skipping it for now) */
-const APPROVED_AFFILIATE_HOSTS = [
-  "shareasale.com",
-  "clickbank.net",
-  "lemonsqueezy.com",
-  "paddle.com"
-];
-
-/** Allowed payment systems creators can select */
-const ALLOWED_PAYMENT_SYSTEMS = ["stripe", "paddle", "lemonsqueezy"];
-
-/* ---------------- Keys (LocalStorage) ---------------- */
-const LS_USER       = "thex_user";
-const LS_TOOLS      = "thex_tools";
-const LS_PENDING    = "thex_pending";
-const LS_RECENT_CAT = "thex_recent_categories";
-const LS_VIEWS      = "thex_views";
-
-/* ---------------- DOM helper ---------------- */
-const $ = (id) => document.getElementById(id);
-
-/* ---------------- User helpers ---------------- */
-function getUser(){
-  try { return JSON.parse(localStorage.getItem(LS_USER) || "null"); }
-  catch { return null; }
-}
-function setUser(u){ localStorage.setItem(LS_USER, JSON.stringify(u)); }
-function isApprover(){
-  const u = getUser();
-  return !!u && u.email && u.email.toLowerCase() === ADMIN_EMAIL.toLowerCase();
-}
-
-/* ---------------- Seed example tools ---------------- */
-const seedTools = [
-  {
-    id: 1,
-    name: "ContentGenius AI",
-    category: "writing",
-    description: "AI content creation for blogs and marketing.",
-    problem: "write blog posts, social captions, seo copy",
-    price: 29,
-    affiliateUrl: "#",
-    image: "https://images.unsplash.com/photo-1518779578993-ec3579fee39f?q=80&w=800&auto=format&fit=crop",
-    isExample: true,
-    reviews: [],
-    listingType: "free",
-    featuredUntil: null,
-    createdAt: "2024-11-15"
-  },
-  {
-    id: 2,
-    name: "CodeAssist Pro",
-    category: "development",
-    description: "AI coding assistant for 50+ languages.",
-    problem: "debug code, autocomplete, code review",
-    price: 0,
-    affiliateUrl: "#",
-    image: "https://images.unsplash.com/photo-1518770660439-4636190af475?q=80&w=800&auto=format&fit=crop",
-    isExample: true,
-    reviews: [],
-    listingType: "free",
-    featuredUntil: null,
-    createdAt: "2024-12-10"
-  },
-  {
-    id: 3,
-    name: "DesignFlow AI",
-    category: "design",
-    description: "Create graphics and logos instantly.",
-    problem: "logo design, social images, brand kits",
-    price: 19,
-    affiliateUrl: "#",
-    image: "https://images.unsplash.com/photo-1498050108023-c5249f4df085?q=80&w=800&auto=format&fit=crop",
-    isExample: true,
-    reviews: [],
-    listingType: "free",
-    featuredUntil: null,
-    createdAt: "2025-01-15"
-  }
-];
-
-/* ---------------- Storage helpers ---------------- */
-function loadTools(){
-  const raw = localStorage.getItem(LS_TOOLS);
-  if (!raw){
-    localStorage.setItem(LS_TOOLS, JSON.stringify(seedTools));
-    return [...seedTools];
-  }
-  try { return JSON.parse(raw) || []; }
-  catch { return [...seedTools]; }
-}
-function saveTools(arr){ localStorage.setItem(LS_TOOLS, JSON.stringify(arr)); }
-
-function loadPending(){
-  try { return JSON.parse(localStorage.getItem(LS_PENDING) || "[]"); }
-  catch { return []; }
-}
-function savePending(arr){ localStorage.setItem(LS_PENDING, JSON.stringify(arr)); }
-
-function bumpViews(id){
-  const raw = localStorage.getItem(LS_VIEWS);
-  const map = raw ? JSON.parse(raw) : {};
-  map[id] = (map[id] || 0) + 1;
-  localStorage.setItem(LS_VIEWS, JSON.stringify(map));
-}
-function getViews(id){
-  const raw = localStorage.getItem(LS_VIEWS);
-  const map = raw ? JSON.parse(raw) : {};
-  return map[id] || 0;
-}
-function pushRecentCategory(cat){
-  if (!cat) return;
-  const raw = localStorage.getItem(LS_RECENT_CAT);
-  const arr = raw ? JSON.parse(raw) : [];
-  arr.unshift(cat);
-  const trimmed = Array.from(new Set(arr)).slice(0, 8);
-  localStorage.setItem(LS_RECENT_CAT, JSON.stringify(trimmed));
-}
-function getRecentCategories(){
-  try { return JSON.parse(localStorage.getItem(LS_RECENT_CAT) || "[]"); }
-  catch { return []; }
-}
-
-/* ---------------- URL helpers ---------------- */
-function getHostname(u){
-  try { return new URL(u).hostname.toLowerCase(); } catch { return ""; }
-}
-function affiliateHostIsApproved(url, chosenHost){
-  const host = getHostname(url);
-  if (!host) return false;
-  const ok = APPROVED_AFFILIATE_HOSTS.includes(host);
-  if (!ok) return false;
-  if (chosenHost && host !== chosenHost) return false;
-  return true;
-}
-
-/* ---------------- Auth (email-only) ---------------- */
-function handleSignupLogin(e){
-  if (e) e.preventDefault();
-  const email = $("authEmail")?.value?.trim();
-  const name  = $("authName")?.value?.trim() || "";
-  if (!email){ alert("Enter your email"); return; }
-  const user = {
-    id: Date.now(),
-    email,
-    name: name || email.split("@")[0],
-    joinedAt: new Date().toISOString()
-  };
-  setUser(user);
-  alert(isApprover() ? "Logged in as Approver" : "Logged in");
-  window.location.href = "index.html";
-}
-window.handleSignupLogin = handleSignupLogin;
-
-/* ---------------- Submit (STRICT affiliate rule) ---------------- */
-function handleSubmitAI(e){
-  if (e) e.preventDefault();
-
-  const name = $("toolName")?.value.trim();
-  const cat  = $("toolCategory")?.value.trim().toLowerCase();
-  const desc = $("toolDescription")?.value.trim();
-  const problem = $("toolProblem")?.value.trim().toLowerCase() || "";
-  const priceType = $("toolPriceType")?.value || "paid";
-  const priceVal  = Number($("toolPriceValue")?.value || 0);
-
-  const paymentSystem  = $("paymentSystem")?.value || "";
-  const affiliatePlatform = $("affiliatePlatform")?.value || "";
-  const affiliateUrl   = $("affiliateUrl")?.value?.trim();
-  const image = $("toolImageUrl")?.value?.trim();
-
-  const listingType = $("listingType")?.value || "free";
-  const paymentEmail = $("paymentEmail")?.value?.trim() || "";
-
-  if (!name || !cat || !desc){
-    alert("Please fill all required fields.");
-    return;
-  }
-  // One-sentence description rule (max one period)
-  const periods = (desc.match(/\./g) || []).length;
-  if (periods > 1){
-    alert("Please write only ONE sentence in the description.");
-    return;
-  }
-
-  // Enforce allowed payment systems
-  if (!ALLOWED_PAYMENT_SYSTEMS.includes(paymentSystem)){
-    alert("Please select a supported payment system (Stripe, Paddle, Lemon Squeezy).");
-    return;
-  }
-
-  // Affiliate REQUIRED for EVERY submission (even Featured)
-  if (!affiliateUrl){
-    alert("All listings on TheXchange require a valid affiliate/referral link.");
-    return;
-  }
-  if (!affiliateHostIsApproved(affiliateUrl, affiliatePlatform)){
-    alert("Affiliate link must come from the selected approved platform (ShareASale, ClickBank, Lemon Squeezy Affiliates, or Paddle Affiliates).");
-    return;
-  }
-
-  // Featured requires payment email (so you can verify after Stripe checkout)
-  if (listingType === "featured" && !paymentEmail){
-    alert("For Featured listings, please pay first and enter your payment email.");
-    return;
-  }
-
-  const price = priceType === "free" ? 0 : Math.max(0, priceVal || 0);
-  const featuredUntil = (listingType === "featured")
-    ? new Date(Date.now() + 1000*60*60*24*30).toISOString() // 30 days
-    : null;
-
-  const pending = loadPending();
-  pending.push({
-    id: Date.now(),
-    name,
-    category: cat,
-    description: desc,
-    problem,
-    price,
-    affiliateUrl,
-    image: image || "",
-    paymentSystem,
-    affiliatePlatform,
-    listingType,
-    paymentEmail,
-    isExample: false,
-    reviews: [],
-    createdBy: getUser()?.email || "anon",
-    createdAt: new Date().toISOString(),
-    featuredUntil
-  });
-  savePending(pending);
-  alert("Submitted! We’ll review it soon.");
-  window.location.href = "index.html";
-}
-window.handleSubmitAI = handleSubmitAI;
-
-/* ---------------- Approver guard & queue ---------------- */
-function requireApproverForQueue(){
-  if (!isApprover()){
-    alert("Approver access only.");
-    window.location.href = "index.html";
-    return false;
-  }
-  return true;
-}
-window.requireApproverForQueue = requireApproverForQueue;
-
-function renderQueue(){
-  if (!requireApproverForQueue()) return;
-  const listEl = $("queueList");
-  if (!listEl) return;
-  const pending = loadPending();
-  if (pending.length === 0){
-    listEl.innerHTML = `<p>No pending submissions.</p>`;
-    return;
-  }
-  listEl.innerHTML = pending.map(t => `
-    <div class="queue-card">
-      ${t.image ? `<img src="${t.image}" alt="${t.name}" class="tool-image" />` : ""}
-      <h3>${t.name} ${t.listingType==="featured" ? `<span class="badge-featured">Featured (Paid)</span>`:""}</h3>
-      <p class="tool-meta">${t.category} · ${t.price === 0 ? 'Free' : `$${t.price}/mo`}</p>
-      <p>${t.description}</p>
-      ${t.problem ? `<p class="muted"><strong>Problem:</strong> ${t.problem}</p>` : ""}
-      <p><strong>Payment:</strong> ${t.paymentSystem.toUpperCase()}</p>
-      <p><strong>Affiliate:</strong> ${t.affiliatePlatform} — <a href="${t.affiliateUrl}" target="_blank" rel="noopener">open</a></p>
-      ${t.listingType==="featured" ? `<p><strong>Payment email:</strong> ${t.paymentEmail || "—"}</p>` : ""}
-      <div class="row between" style="margin-top:10px;">
-        <a class="btn" href="${t.affiliateUrl}" target="_blank" rel="noopener">Test affiliate link</a>
-        <div class="spacer"></div>
-        <button class="btn primary" onclick="approveTool(${t.id})">Approve</button>
-        <button class="btn" onclick="rejectTool(${t.id})">Reject</button>
-      </div>
-    </div>
-  `).join("");
-}
-window.renderQueue = renderQueue;
-
-function approveTool(id){
-  if (!isApprover()) { alert("Approver only."); return; }
-  const pending = loadPending();
-  const tools   = loadTools();
-  const idx = pending.findIndex(t => t.id === id);
-  if (idx === -1) return;
-  const item = pending[idx];
-  pending.splice(idx, 1);
-  tools.push(item);
-  savePending(pending);
-  saveTools(tools);
-  renderQueue();
-}
-window.approveTool = approveTool;
-
-function rejectTool(id){
-  if (!isApprover()) { alert("Approver only."); return; }
-  const filtered = loadPending().filter(t => t.id !== id);
-  savePending(filtered);
-  renderQueue();
-}
-window.rejectTool = rejectTool;
-
-/* ---------------- Rendering helpers ---------------- */
-function isCurrentlyFeatured(tool){
-  if (!tool.featuredUntil) return false;
-  return new Date(tool.featuredUntil).getTime() > Date.now();
-}
-
-function toolCardHTML(tool){
-  const priceHtml = tool.price === 0
-    ? `<span class="price-free">Free</span>`
-    : `<span class="price-paid">$${tool.price}/mo</span>`;
-  const featured = isCurrentlyFeatured(tool);
-  return `
-    <div class="tool-card">
-      ${tool.image ? `<img src="${tool.image}" alt="${tool.name}" class="tool-image" />` : ""}
-      <div class="row between">
-        <h3 class="tool-name">${tool.name}</h3>
-        <div class="row gap">
-          ${tool.isExample ? `<span class="badge-example">This is an example</span>` : ``}
-          ${featured ? `<span class="badge-featured">Featured</span>` : ``}
-        </div>
-      </div>
-      <p class="tool-desc">${tool.description}</p>
-      <p class="tool-meta">${priceHtml} · ${tool.category}</p>
-      <div class="row between" style="margin-top:8px;">
-        <a class="btn" href="tool.html?id=${tool.id}" onclick="recordView(${tool.id}, '${tool.category}')">View</a>
-        ${tool.affiliateUrl ? `<a class="btn primary" href="${tool.affiliateUrl}" target="_blank" rel="noopener">Go to site</a>` : ``}
-      </div>
-    </div>
-  `;
-}
-
-function recordView(id, cat){
-  bumpViews(id);
-  pushRecentCategory(cat);
-}
-
-/* ---------------- Sorting & search ---------------- */
-function sortPopular(tools){ return [...tools].sort((a,b)=> getViews(b.id) - getViews(a.id)); }
-function sortNew(tools){ return [...tools].sort((a,b)=> new Date(b.createdAt||0) - new Date(a.createdAt||0)); }
-function sortTrending(tools){
-  return [...tools].sort((a,b)=>{
-    const score = (t)=>{
-      const days = Math.max(1, (Date.now() - new Date(t.createdAt||Date.now()))/86400000);
-      const reviews = (t.reviews||[]).length;
-      const featuredBoost = isCurrentlyFeatured(t) ? 50 : 0;
-      return getViews(t.id)*2 + reviews*10 + featuredBoost + (30/days);
-    };
-    return score(b) - score(a);
-  });
-}
-function filterBySearch(tools, q){
-  if (!q) return tools;
-  const s = q.trim().toLowerCase();
-  return tools.filter(t =>
-    (t.name || "").toLowerCase().includes(s) ||
-    (t.description || "").toLowerCase().includes(s) ||
-    (t.category || "").toLowerCase().includes(s) ||
-    (t.problem || "").toLowerCase().includes(s)
-  );
-}
-function recommendForUser(tools){
-  const cats = getRecentCategories();
-  if (!cats.length) return [];
-  const set = new Set();
-  const rec = [];
-  for (const cat of cats){
-    for (const t of tools){
-      if (t.category === cat && !set.has(t.id)){
-        rec.push(t); set.add(t.id);
-        if (rec.length >= 8) return rec;
+    const lb = document.getElementById("logoutBtn");
+    if (lb) lb.addEventListener("click", () => {
+      setCurrentUser(null);
+      renderNavAuth();
+      // optional redirect
+      if (document.body.getAttribute("data-page") !== "home") {
+        window.location.href = "index.html";
       }
-    }
+    });
+  } else {
+    slot.innerHTML = `<a href="signup.html" class="btn">Sign In</a>`;
   }
-  return rec.slice(0,8);
 }
 
-/* ---------------- Homepage renderer ---------------- */
-function searchBarHTML(){
-  return `
-    <section class="container">
-      <div class="search-wrap">
-        <input id="searchInput" class="search-input" placeholder="Search by name, category, or problem..." />
-      </div>
-    </section>
-  `;
-}
-function sectionHTML(title, items){
-  if (!items.length) return "";
-  return `
-    <section class="container">
-      <h2 class="section-title">${title}</h2>
-      <div class="grid">
-        ${items.map(toolCardHTML).join("")}
-      </div>
-    </section>
-  `;
-}
-function promoteBlockHTML(){
-  return `
-    <section class="container">
-      <div class="promo">
-        <div>
-          <h3>Promote your AI</h3>
-          <p class="muted">Featured listings are shown above others for 30 days.</p>
-        </div>
-        <button id="promoteBtn" class="btn primary" type="button">Get Featured</button>
-      </div>
-    </section>
-  `;
-}
+/* =============== AUTH PAGE (signup.html) =============== */
+/* This assumes the HTML from my last message. If IDs differ, adjust here. */
+function initSignupPage() {
+  if (document.body.getAttribute("data-page") !== "signup") return;
 
-function renderHome(){
-  const wrap = $("homeSections");
-  if (!wrap) return;
+  const form = document.getElementById("authForm");
+  const nameWrap = document.getElementById("nameWrap");
+  const accountTypeWrap = document.getElementById("accountTypeWrap");
+  const nameInput = document.getElementById("nameInput");
+  const emailInput = document.getElementById("emailInput");
+  const passwordInput = document.getElementById("passwordInput");
+  const accountTypeSelect = document.getElementById("accountTypeSelect");
+  const btnLogin = document.getElementById("modeLogin");
+  const btnSignup = document.getElementById("modeSignup");
+  const errorEl = document.getElementById("authError");
+  const okEl = document.getElementById("authSuccess");
 
-  const user = getUser();
-  let tools = loadTools();
-  let searchInput = null;
+  let mode = "login";
 
-  function draw(){
-    const q = searchInput ? (searchInput.value || "") : "";
-    const all = filterBySearch(tools, q);
-
-    const featured = all.filter(isCurrentlyFeatured);
-    const trending = sortTrending(all).slice(0,8);
-    const popular  = sortPopular(all).slice(0,8);
-    const newest   = sortNew(all).slice(0,8);
-    const rec      = user ? recommendForUser(all).slice(0,8) : [];
-
-    wrap.innerHTML = `
-      ${searchBarHTML()}
-      ${user && rec.length ? sectionHTML("Recommended for you", rec) : ""}
-      ${featured.length ? sectionHTML("Featured", featured.slice(0,8)) : ""}
-      ${q
-        ? sectionHTML(\`Search results (\${all.length})\`, all)
-        : sectionHTML("Trending", trending) + sectionHTML("Popular", popular) + sectionHTML("New", newest)
-      }
-      ${promoteBlockHTML()}
-    `;
-
-    // bind search
-    searchInput = $("searchInput");
-    if (searchInput && !searchInput._wired){
-      searchInput.addEventListener("input", draw);
-      searchInput._wired = true;
-    }
-
-    // wire the promote button
-    const payBtn = $("promoteBtn");
-    if (payBtn && !payBtn._wired){
-      payBtn.addEventListener("click", ()=> window.open(FEATURED_PAYMENT_LINK, "_blank"));
-      payBtn._wired = true;
-    }
+  function setMode(newMode) {
+    mode = newMode;
+    const isSignup = mode === "signup";
+    if (nameWrap) nameWrap.style.display = isSignup ? "block" : "none";
+    if (accountTypeWrap) accountTypeWrap.style.display = isSignup ? "block" : "none";
+    if (btnLogin) btnLogin.className = mode === "login" ? "btn" : "btn outline";
+    if (btnSignup) btnSignup.className = mode === "signup" ? "btn" : "btn outline";
+    if (errorEl) errorEl.style.display = "none";
+    if (okEl) okEl.style.display = "none";
   }
 
-  draw();
-}
-window.renderHome = renderHome;
+  setMode("login");
 
-/* ---------------- Tool detail + reviews ---------------- */
-function getQueryId(){
-  const url = new URL(window.location.href);
-  return Number(url.searchParams.get("id") || 0);
-}
-function findToolById(id){ return loadTools().find(t => t.id === id); }
+  if (btnLogin) btnLogin.addEventListener("click", () => setMode("login"));
+  if (btnSignup) btnSignup.addEventListener("click", () => setMode("signup"));
 
-function renderToolDetail(){
-  const wrap = $("toolDetail");
-  if (!wrap) return;
-  const id = getQueryId();
-  const tool = findToolById(id);
-  if (!tool){ wrap.innerHTML = `<p>Tool not found.</p>`; return; }
-
-  pushRecentCategory(tool.category);
-  bumpViews(tool.id);
-
-  const priceHtml = tool.price === 0
-    ? `<span class="price-free">Free</span>`
-    : `<span class="price-paid">$${tool.price}/mo</span>`;
-
-  const reviewsHtml = (tool.reviews || []).length
-    ? tool.reviews.map(r => `
-        <div class="review">
-          <div class="row between">
-            <strong>${r.userName || "User"}</strong>
-            <span>${"★".repeat(r.rating)}${"☆".repeat(5 - r.rating)}</span>
-          </div>
-          <p>${r.text}</p>
-        </div>
-      `).join("")
-    : `<p class="muted">No reviews yet. Be the first!</p>`;
-
-  const featured = isCurrentlyFeatured(tool);
-
-  wrap.innerHTML = `
-    <div class="tool-detail">
-      ${tool.image ? `<img src="${tool.image}" alt="${tool.name}" class="tool-hero" />` : ""}
-      <div class="row between">
-        <h1>${tool.name}</h1>
-        <div class="row gap">
-          ${tool.isExample ? `<span class="badge-example">This is an example</span>` : ""}
-          ${featured ? `<span class="badge-featured">Featured</span>` : ""}
-        </div>
-      </div>
-      <p class="tool-meta">${priceHtml} · ${tool.category}</p>
-      ${tool.problem ? `<p class="muted"><strong>Solves:</strong> ${tool.problem}</p>` : ""}
-      <p>${tool.description}</p>
-      <div class="row gap" style="margin:10px 0 16px;">
-        ${tool.affiliateUrl ? `<a class="btn primary" href="${tool.affiliateUrl}" target="_blank" rel="noopener">Go to site</a>` : ``}
-        <a class="btn" href="index.html">Back</a>
-      </div>
-
-      <hr />
-
-      <h2>Reviews</h2>
-      <div id="reviewsWrap">${reviewsHtml}</div>
-
-      <form id="reviewForm" class="review-form">
-        <label>Rating
-          <select id="reviewRating">
-            <option value="5">★★★★★</option>
-            <option value="4">★★★★☆</option>
-            <option value="3">★★★☆☆</option>
-            <option value="2">★★☆☆☆</option>
-            <option value="1">★☆☆☆☆</option>
-          </select>
-        </label>
-        <label>Comment
-          <input id="reviewText" maxlength="200" placeholder="One short sentence (max 200 chars)" />
-        </label>
-        <button class="btn primary">Submit review</button>
-      </form>
-    </div>
-  `;
-
-  const form = $("reviewForm");
-  if (form){
-    form.addEventListener("submit", (e)=>{
+  if (form) {
+    form.addEventListener("submit", (e) => {
       e.preventDefault();
-      addReview(tool.id);
+      if (errorEl) errorEl.style.display = "none";
+      if (okEl) okEl.style.display = "none";
+
+      const email = (emailInput?.value || "").trim().toLowerCase();
+      const pwd = (passwordInput?.value || "").trim();
+
+      if (!email || !pwd) {
+        if (errorEl) { errorEl.textContent = "Please fill in email and password."; errorEl.style.display = "block"; }
+        return;
+      }
+
+      if (mode === "signup") {
+        const name = (nameInput?.value || "").trim();
+        const type = accountTypeSelect?.value || "user";
+        if (!name) {
+          if (errorEl) { errorEl.textContent = "Please enter your full name."; errorEl.style.display = "block"; }
+          return;
+        }
+        const users = getUsers();
+        if (users.some(u => u.email === email)) {
+          if (errorEl) { errorEl.textContent = "An account with this email already exists. Please sign in."; errorEl.style.display = "block"; }
+          return;
+        }
+        const role = (email === APPROVER_EMAIL) ? "admin" : "user";
+        const user = {
+          id: Date.now(),
+          name,
+          email,
+          password: pwd, // demo only
+          role,
+          accountType: type,
+          joinedAt: new Date().toISOString()
+        };
+        users.push(user);
+        saveUsers(users);
+        setCurrentUser(user);
+        if (okEl) { okEl.textContent = "Account created. Redirecting…"; okEl.style.display = "block"; }
+        renderNavAuth();
+        setTimeout(() => { window.location.href = "index.html"; }, 600);
+        return;
+      }
+
+      if (mode === "login") {
+        const users = getUsers();
+        const found = users.find(u => u.email === email && u.password === pwd);
+        if (!found) {
+          if (errorEl) { errorEl.textContent = "Wrong email or password."; errorEl.style.display = "block"; }
+          return;
+        }
+        setCurrentUser(found);
+        if (okEl) { okEl.textContent = "Signed in. Redirecting…"; okEl.style.display = "block"; }
+        renderNavAuth();
+        setTimeout(() => { window.location.href = "index.html"; }, 400);
+      }
     });
   }
 }
-window.renderToolDetail = renderToolDetail;
 
-function addReview(toolId){
-  const u = getUser();
-  if (!u){
-    alert("Please sign in first.");
-    window.location.href = "signup.html";
-    return;
-  }
-  const rating = Number($("reviewRating").value || 5);
-  const text   = ($("reviewText").value || "").trim();
-  if (!text){ alert("Please write a short comment."); return; }
-
-  const tools = loadTools();
-  const idx = tools.findIndex(t => t.id === toolId);
-  if (idx === -1) return;
-
-  tools[idx].reviews = tools[idx].reviews || [];
-  tools[idx].reviews.push({
-    id: Date.now(),
-    userId: u.id,
-    userName: u.name || (u.email?.split("@")[0] || "User"),
-    rating,
-    text,
-    createdAt: new Date().toISOString()
-  });
-  saveTools(tools);
-  renderToolDetail();
+/* =============== HOME PAGE (index.html) =============== */
+function calculateRating(tool) {
+  if (!tool.reviews || !tool.reviews.length) return tool.rating || 0;
+  const avg = tool.reviews.reduce((acc, r) => acc + Number(r.rating || 0), 0) / tool.reviews.length;
+  return Number(avg.toFixed(1));
 }
 
-/* ---------------- Router ---------------- */
-document.addEventListener("DOMContentLoaded", ()=>{
-  const page = document.body.getAttribute("data-page");
+function sortTrending(tools) {
+  // Recency + reviews (simple heuristic)
+  return [...tools].sort((a, b) => {
+    const daysA = (Date.now() - new Date(a.createdAt).getTime()) / 86400000;
+    const daysB = (Date.now() - new Date(b.createdAt).getTime()) / 86400000;
+    const scoreA = ((a.reviews?.length || 0) + 1) * 120 / (daysA + 2);
+    const scoreB = ((b.reviews?.length || 0) + 1) * 120 / (daysB + 2);
+    return scoreB - scoreA;
+  });
+}
+function sortPopular(tools) {
+  return [...tools].sort((a,b) => (b.users||0) - (a.users||0));
+}
+function sortNew(tools) {
+  return [...tools].sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
+}
 
-  if (page === "home")  renderHome();
-  if (page === "queue") renderQueue();
-  if (page === "tool")  renderToolDetail();
+function matchesSearch(tool, q) {
+  if (!q) return true;
+  const s = q.toLowerCase();
+  return (
+    tool.name?.toLowerCase().includes(s) ||
+    tool.category?.toLowerCase().includes(s) ||
+    tool.description?.toLowerCase().includes(s) ||
+    tool.problem?.toLowerCase().includes(s)
+  );
+}
 
-  if (page === "submit"){
-    const form = $("submitForm");
-    if (form) form.addEventListener("submit", handleSubmitAI);
+function toolCardHTML(t) {
+  const priceBadge = (t.priceType === "free") ? `<span class="price">Free</span>` : `<span class="price">$${t.price}/mo</span>`;
+  const exampleBadge = t.isExample ? `<span class="badge example">example</span>` : ``;
+  const premium = t.isPremium ? `<span class="badge premium">Premium</span>` : ``;
+  const img = t.imageUrl ? `<img src="${t.imageUrl}" alt="${t.name}" class="tool-img" />` : ``;
+  const rating = calculateRating(t);
+  const href = `tool.html?id=${encodeURIComponent(t.id)}`;
 
-    const payBtn = $("payFeaturedBtn");
-    if (payBtn){ payBtn.addEventListener("click", ()=> window.open(FEATURED_PAYMENT_LINK, "_blank")); }
+  return `
+    <div class="tool-card">
+      ${premium}
+      ${exampleBadge}
+      ${img}
+      <h3 class="tool-name">${t.name}</h3>
+      <div class="tool-desc">${t.description}</div>
+      <div class="tool-meta">
+        <span class="rating">⭐ ${rating} (${t.reviews?.length || 0})</span>
+        <span class="users">${(t.users/1000|0)}K+ users</span>
+      </div>
+      <div class="tool-bottom">
+        ${priceBadge}
+        <a class="btn primary" href="${href}">View</a>
+      </div>
+    </div>
+  `;
+}
 
-    const listingType = $("listingType");
-    const payBlock = $("paidBlock");
-    if (listingType && payBlock){
-      const toggle = ()=> { payBlock.style.display = (listingType.value==="featured") ? "grid" : "none"; };
-      listingType.addEventListener("change", toggle); toggle();
+function renderHome() {
+  if (document.body.getAttribute("data-page") !== "home") return;
+
+  const root = document.getElementById("homeRoot");
+  if (!root) return;
+
+  const toolsAll = getTools().filter(t => t.status === "approved");
+  const searchInput = document.getElementById("searchInput");
+
+  function renderAll(q = "") {
+    const list = toolsAll.filter(t => matchesSearch(t, q));
+    const trending = sortTrending(list).slice(0, 8);
+    const popular = sortPopular(list).slice(0, 8);
+    const newest = sortNew(list).slice(0, 8);
+
+    root.innerHTML = `
+      <div class="hero">
+        <h1>Find your perfect AI tool</h1>
+        <p>Search by what you need, browse Trending / Popular / New.</p>
+        <div class="search-wrap">
+          <input id="searchInputLive" class="input" placeholder="Describe your problem… e.g. 'write product descriptions'">
+        </div>
+      </div>
+
+      ${q ? `<h2>Search Results (${list.length})</h2>` : ""}
+
+      ${q ? `
+        <div class="grid">
+          ${list.map(toolCardHTML).join("") || `<div class="empty">No results yet. Try a different query.</div>`}
+        </div>
+      ` : `
+        <section>
+          <div class="section-title"><h2>Trending</h2></div>
+          <div class="grid">${trending.map(toolCardHTML).join("")}</div>
+        </section>
+
+        <section>
+          <div class="section-title"><h2>Most Popular</h2></div>
+          <div class="grid">${popular.map(toolCardHTML).join("")}</div>
+        </section>
+
+        <section>
+          <div class="section-title"><h2>New Arrivals</h2></div>
+          <div class="grid">${newest.map(toolCardHTML).join("")}</div>
+        </section>
+      `}
+    `;
+
+    const searchLive = document.getElementById("searchInputLive");
+    if (searchLive) {
+      searchLive.value = q;
+      searchLive.addEventListener("input", (e) => {
+        renderAll(e.target.value || "");
+      });
+      // Enter submits same handler
+      searchLive.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          renderAll(searchLive.value || "");
+        }
+      });
     }
   }
 
-  if (page === "signup"){
-    const authForm = $("authForm");
-    if (authForm) authForm.addEventListener("submit", handleSignupLogin);
+  // initial render using any existing search input on page
+  let initialQuery = "";
+  if (searchInput && searchInput.value) initialQuery = searchInput.value;
+  renderAll(initialQuery);
+}
+
+/* =============== SUBMIT PAGE (submit.html) =============== */
+function initSubmitPage() {
+  if (document.body.getAttribute("data-page") !== "submit") return;
+
+  const form = document.getElementById("submitForm");
+  const nameEl = document.getElementById("toolName");
+  const catEl = document.getElementById("toolCategory");
+  const descEl = document.getElementById("toolDescription");
+  const priceTypeEl = document.getElementById("toolPriceType");
+  const priceValueEl = document.getElementById("toolPriceValue");
+  const urlEl = document.getElementById("toolUrl");
+  const imgEl = document.getElementById("toolImageUrl");
+  const platformEl = document.getElementById("paymentPlatform");
+  const affiliateEl = document.getElementById("affiliateLink");
+  const noticeEl = document.getElementById("submitNotice");
+
+  // Populate platform options if select exists
+  if (platformEl && platformEl.tagName === "SELECT" && !platformEl.children.length) {
+    ALLOWED_PAYMENT_PLATFORMS.forEach(p => {
+      const opt = document.createElement("option");
+      opt.value = p;
+      opt.textContent = p;
+      platformEl.appendChild(opt);
+    });
   }
+
+  if (form) {
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+
+      const user = getCurrentUser();
+      if (!user) {
+        alert("Please sign in first.");
+        window.location.href = "signup.html";
+        return;
+      }
+
+      const name = (nameEl?.value || "").trim();
+      const category = (catEl?.value || "").trim();
+      const description = (descEl?.value || "").trim();
+      const priceType = (priceTypeEl?.value || "free").trim(); // "free" | "paid"
+      const price = priceType === "paid" ? Number(priceValueEl?.value || 0) : 0;
+      const url = (urlEl?.value || "").trim();
+      const imageUrl = (imgEl?.value || "").trim();
+      const paymentPlatform = (platformEl?.value || "").trim();
+      const affiliateLink = (affiliateEl?.value || "").trim();
+
+      if (!name || !category || !description || !url) {
+        alert("Please fill out name, category, description, and link.");
+        return;
+      }
+      if (priceType === "paid" && (!price || price < 0)) {
+        alert("Please enter a valid monthly price for paid tools.");
+        return;
+      }
+      if (!ALLOWED_PAYMENT_PLATFORMS.includes(paymentPlatform)) {
+        alert("Please choose a valid payment platform.");
+        return;
+      }
+      if (!/^https?:\/\//i.test(affiliateLink)) {
+        alert("Please include a valid affiliate link (must start with http or https).");
+        return;
+      }
+
+      const tools = getTools();
+      const newTool = {
+        id: Date.now(),
+        name,
+        category,
+        description,
+        problem: description.toLowerCase(), // keep it simple for search
+        priceType,
+        price,
+        rating: 0,
+        users: 0,
+        isPremium: false,
+        creator: user.name || user.email.split("@")[0],
+        createdAt: new Date().toISOString(),
+        features: [],
+        imageUrl,
+        url,
+        paymentPlatform,
+        affiliateLink,
+        isExample: false,
+        status: "pending",
+        ownerEmail: user.email,
+        reviews: []
+      };
+
+      tools.push(newTool);
+      saveTools(tools);
+
+      if (noticeEl) noticeEl.textContent = "Submitted! Waiting for approval.";
+      alert("Submitted! Your AI is pending approval.");
+      window.location.href = "index.html";
+    });
+  }
+
+  // If admin is on submit page, optionally show pending list with approve buttons
+  const adminPanel = document.getElementById("pendingList");
+  const u = getCurrentUser();
+  if (adminPanel && u && u.role === "admin") {
+    const tools = getTools().filter(t => t.status === "pending");
+    adminPanel.innerHTML = `
+      <h3>Pending approvals (${tools.length})</h3>
+      <div class="list">
+        ${tools.map(t => `
+          <div class="pending-item">
+            <div>
+              <strong>${t.name}</strong> — <em>${t.category}</em><br/>
+              <small>by ${t.creator} · ${new Date(t.createdAt).toLocaleDateString()}</small>
+            </div>
+            <div class="actions">
+              <button class="btn small" data-approve="${t.id}">Approve</button>
+              <button class="btn outline small" data-reject="${t.id}">Reject</button>
+            </div>
+          </div>
+        `).join("") || `<div class="empty">No pending items.</div>`}
+      </div>
+    `;
+    adminPanel.addEventListener("click", (e) => {
+      const el = e.target;
+      if (!(el instanceof HTMLElement)) return;
+      const approveId = el.getAttribute("data-approve");
+      const rejectId = el.getAttribute("data-reject");
+      if (approveId) {
+        const all = getTools();
+        const idx = all.findIndex(t => String(t.id) === String(approveId));
+        if (idx >= 0) {
+          all[idx].status = "approved";
+          saveTools(all);
+          alert("Approved.");
+          location.reload();
+        }
+      }
+      if (rejectId) {
+        const all = getTools();
+        const idx = all.findIndex(t => String(t.id) === String(rejectId));
+        if (idx >= 0) {
+          all.splice(idx,1);
+          saveTools(all);
+          alert("Rejected & removed.");
+          location.reload();
+        }
+      }
+    });
+  }
+}
+
+/* =============== TOOL DETAIL PAGE (tool.html) =============== */
+function initToolPage() {
+  if (document.body.getAttribute("data-page") !== "tool") return;
+
+  const root = document.getElementById("toolRoot");
+  if (!root) return;
+
+  const params = new URLSearchParams(location.search);
+  const id = params.get("id");
+  const all = getTools();
+  const tool = all.find(t => String(t.id) === String(id) && t.status === "approved");
+
+  if (!tool) {
+    root.innerHTML = `<div class="empty">Tool not found or not approved yet.</div>`;
+    return;
+  }
+
+  const rating = calculateRating(tool);
+
+  root.innerHTML = `
+    <div class="tool-detail">
+      <a href="index.html" class="back">← Back</a>
+      ${tool.isPremium ? `<span class="badge premium">Premium</span>` : ``}
+      ${tool.isExample ? `<span class="badge example">example</span>` : ``}
+      <h1>${tool.name}</h1>
+      <p class="muted">by ${tool.creator}</p>
+      <div class="summary">
+        ${tool.imageUrl ? `<img src="${tool.imageUrl}" alt="${tool.name}" class="detail-img" />` : ``}
+        <div class="summary-text">
+          <p>${tool.description}</p>
+          <div class="meta">
+            <span>⭐ ${rating} (${tool.reviews?.length || 0})</span>
+            <span>${tool.users?.toLocaleString?.() || 0} users</span>
+            <span>${tool.category}</span>
+          </div>
+          <div class="cta-row">
+            ${tool.priceType === "free" ? `<div class="price">Free</div>` : `<div class="price">$${tool.price}/mo</div>`}
+            <a class="btn primary" href="${tool.affiliateLink || tool.url}" target="_blank" rel="noopener">Go to tool</a>
+          </div>
+        </div>
+      </div>
+
+      <section>
+        <h2>Reviews</h2>
+        <div id="reviewsWrap">
+          ${renderReviewsHTML(tool)}
+        </div>
+
+        <div id="addReviewWrap" class="add-review">
+          <h3>Write a review</h3>
+          <form id="reviewForm">
+            <label class="label">Rating (1–5)</label>
+            <input id="reviewRating" class="input" type="number" min="1" max="5" value="5" required />
+            <label class="label">Your review</label>
+            <textarea id="reviewText" class="input" rows="4" placeholder="Share your experience…" required></textarea>
+            <button class="btn primary" type="submit">Submit Review</button>
+          </form>
+        </div>
+      </section>
+    </div>
+  `;
+
+  const form = document.getElementById("reviewForm");
+  if (form) {
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const u = getCurrentUser();
+      if (!u) {
+        alert("Please sign in first.");
+        window.location.href = "signup.html";
+        return;
+      }
+      const ratingEl = document.getElementById("reviewRating");
+      const textEl = document.getElementById("reviewText");
+      const r = Number(ratingEl.value || 5);
+      const text = (textEl.value || "").trim();
+      if (!text) { alert("Please write a review."); return; }
+
+      const all2 = getTools();
+      const idx = all2.findIndex(t => String(t.id) === String(tool.id));
+      if (idx < 0) return;
+
+      const newReview = {
+        id: Date.now(),
+        userId: u.id,
+        userName: u.name || u.email.split("@")[0],
+        rating: Math.max(1, Math.min(5, r)),
+        text,
+        createdAt: new Date().toISOString(),
+        helpful: 0
+      };
+      all2[idx].reviews = [...(all2[idx].reviews || []), newReview];
+      saveTools(all2);
+
+      // re-render reviews
+      const wrap = document.getElementById("reviewsWrap");
+      if (wrap) wrap.innerHTML = renderReviewsHTML(all2[idx]);
+      form.reset();
+      ratingEl.value = 5;
+    });
+  }
+}
+
+function renderReviewsHTML(tool) {
+  const list = [...(tool.reviews || [])].sort((a,b) => b.helpful - a.helpful);
+  if (!list.length) return `<div class="empty">No reviews yet. Be the first!</div>`;
+  return `
+    <div class="reviews">
+      ${list.map(r => `
+        <div class="review">
+          <div class="review-top">
+            <strong>${r.userName}</strong>
+            <span>⭐ ${r.rating}</span>
+          </div>
+          <div class="review-date">${new Date(r.createdAt).toLocaleDateString()}</div>
+          <p>${escapeHTML(r.text)}</p>
+        </div>
+      `).join("")}
+    </div>
+  `;
+}
+
+/* =============== UTILS =============== */
+function escapeHTML(s) {
+  return String(s).replace(/[&<>"']/g, (m)=>({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;" }[m]));
+}
+
+/* =============== BOOT =============== */
+document.addEventListener("DOMContentLoaded", () => {
+  maybeSeedTools();
+  renderNavAuth();
+  initSignupPage();
+  initSubmitPage();
+  renderHome();
+  initToolPage();
 });
-
-
-
-
 

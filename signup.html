@@ -3,28 +3,61 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>TheXchange — Sign Up</title>
+  <title>TheXchange — Sign In / Sign Up</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="assetsstyle.css" />
 </head>
 <body data-page="signup">
   <nav class="nav">
+    <div class="brand">
+      <div class="brand-badge">x</div>
+      <strong>theXchange</strong>
+    </div>
     <a href="index.html">Home</a>
     <a href="submit.html">Submit an AI</a>
-    <a href="signup.html">Sign Up</a>
+    <span id="navAuth"></span>
   </nav>
 
   <main class="container">
-    <h1>Sign In</h1>
-    <form id="authForm" class="form">
-      <label>Email
-        <input id="authEmail" type="email" placeholder="you@example.com" required />
-      </label>
+    <h1 style="margin:16px 0;">Sign in or create an account</h1>
 
-      <label>Name (optional)
-        <input id="authName" type="text" placeholder="Your name" />
-      </label>
+    <!-- Toggle -->
+    <div style="display:flex;gap:8px;margin:12px 0;">
+      <button id="modeLogin" class="btn">Sign In</button>
+      <button id="modeSignup" class="btn outline">Create Account</button>
+    </div>
 
-      <button class="btn primary">Continue</button>
+    <!-- FORM -->
+    <form id="authForm" style="max-width:480px;display:grid;gap:12px;">
+      <!-- Only shows in signup mode -->
+      <div id="nameWrap" style="display:none;">
+        <label class="label">Full name</label>
+        <input id="nameInput" class="input" placeholder="John Doe" autocomplete="name" />
+      </div>
+
+      <div>
+        <label class="label">Email</label>
+        <input id="emailInput" class="input" type="email" required autocomplete="email" placeholder="you@example.com" />
+      </div>
+
+      <div>
+        <label class="label">Password</label>
+        <input id="passwordInput" class="input" type="password" required autocomplete="current-password" placeholder="••••••••" />
+      </div>
+
+      <!-- Only shows in signup mode -->
+      <div id="accountTypeWrap" style="display:none;">
+        <label class="label">Account type</label>
+        <select id="accountTypeSelect" class="input">
+          <option value="user">User</option>
+          <option value="creator">Creator</option>
+        </select>
+      </div>
+
+      <button id="submitBtn" type="submit" class="btn primary">Continue</button>
+
+      <p id="authError" style="color:#d33;display:none;margin:4px 0 0;"></p>
+      <p id="authSuccess" style="color:#2c7a2c;display:none;margin:4px 0 0;"></p>
     </form>
   </main>
 
