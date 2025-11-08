@@ -1,593 +1,399 @@
-/* =========================================================
-   TheXchange - App JS (Front-end only / localStorage)
-   Features:
-   - Auth (signup/signin) with localStorage
-   - Approver role (admin) by email
-   - Submit AI (requires allowed payment platform + affiliate link)
-   - Approvals (admin only)
-   - Home page: Search + Trending/Popular/New
-   - Tool detail: Reviews
-   ========================================================= */
+// app.js — theXchange (Firebase Auth + Firestore, scalable & secure)
+import {
+  ADMIN_EMAIL, auth, db,
+  onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, updateProfile, sendEmailVerification,
+  collection, doc, addDoc, getDoc, getDocs, query, where, orderBy, limit, serverTimestamp, updateDoc, setDoc, deleteDoc
+} from "./firebase.js";
 
-/* =============== CONFIG =============== */
-const APPROVER_EMAIL = "thexchangeceo@gmail.com"; // you are the admin
-const ALLOWED_PAYMENT_PLATFORMS = ["Stripe", "Paddle", "Lemon Squeezy", "ShareASale"]; // submit page dropdown
+/* ---------- Helpers ---------- */
+const $ = (id)=>document.getElementById(id);
+const esc = (s)=>String(s||"").replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
+const ALLOWED_PAYMENT_PLATFORMS = ["Stripe","Paddle","Lemon Squeezy","ShareASale"];
 
-/* =============== STORAGE HELPERS =============== */
-function getUsers() {
-  try { return JSON.parse(localStorage.getItem("tx_users") || "[]"); } catch { return []; }
-}
-function saveUsers(list) {
-  localStorage.setItem("tx_users", JSON.stringify(list));
-}
-function getCurrentUser() {
-  try { return JSON.parse(localStorage.getItem("tx_current_user") || "null"); } catch { return null; }
-}
-function setCurrentUser(user) {
-  if (user) localStorage.setItem("tx_current_user", JSON.stringify(user));
-  else localStorage.removeItem("tx_current_user");
-}
+/* ---------- Example fallback (shown only if DB empty) ---------- */
+const EXAMPLE_TOOLS = [
+  {id:"ex1",name:"ContentGenius AI",category:"Writing",description:"AI content for blogs & marketing",priceType:"paid",price:29,url:"#",imageUrl:"https://images.unsplash.com/photo-1515879218367-8466d910aaa4?w=1200",isExample:true,usersCount:52000,reviewsCount:0,isPremium:true},
+  {id:"ex2",name:"CodeAssist Pro",category:"Development",description:"AI coding assistant",priceType:"paid",price:49,url:"#",imageUrl:"https://images.unsplash.com/photo-1518779578993-ec3579fee39f?w=1200",isExample:true,usersCount:103000,reviewsCount:0,isPremium:true},
+  {id:"ex3",name:"DesignFlow AI",category:"Design",description:"Graphics & logos automatically",priceType:"paid",price:19,url:"#",imageUrl:"https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=1200",isExample:true,usersCount:76000,reviewsCount:0,isPremium:false},
+  {id:"ex4",name:"TaskFlow AI",category:"Productivity",description:"Smart task management",priceType:"free",price:0,url:"#",imageUrl:"https://images.unsplash.com/photo-1519389950473-47ba0277781c?w=1200",isExample:true,usersCount:67000,reviewsCount:0,isPremium:false}
+];
 
-function getTools() {
-  try { return JSON.parse(localStorage.getItem("tx_tools") || "[]"); } catch { return []; }
-}
-function saveTools(list) {
-  localStorage.setItem("tx_tools", JSON.stringify(list));
-}
-
-/* =============== SEED EXAMPLE TOOLS (one-time) =============== */
-function maybeSeedTools() {
-  const existing = getTools();
-  if (existing && existing.length) return;
-
-  const now = new Date();
-  const daysAgo = (d) => new Date(now.getTime() - d*86400000).toISOString();
-
-  const seed = [
-    {
-      id: Date.now()+1,
-      name: "ContentGenius AI",
-      category: "Writing",
-      description: "AI content creation for blogs and marketing",
-      problem: "writing content creating blogs social media posts",
-      priceType: "paid",
-      price: 29,
-      rating: 4.8,
-      users: 50234,
-      isPremium: true,
-      creator: "ContentCorp",
-      createdAt: daysAgo(90),
-      features: ["Blog writing","Social posts","SEO optimization","Email copy"],
-      imageUrl: "",
-      url: "#",
-      paymentPlatform: "Stripe",
-      affiliateLink: "#",
-      isExample: true,
-      status: "approved", // examples appear
-      reviews: []
-    },
-    {
-      id: Date.now()+2,
-      name: "CodeAssist Pro",
-      category: "Development",
-      description: "AI coding assistant for 50+ languages",
-      problem: "coding programming debugging writing code",
-      priceType: "paid",
-      price: 49,
-      rating: 4.9,
-      users: 103445,
-      isPremium: true,
-      creator: "DevTools",
-      createdAt: daysAgo(120),
-      features: ["Code completion","Bug detection","Code review","Documentation"],
-      imageUrl: "",
-      url: "#",
-      paymentPlatform: "Paddle",
-      affiliateLink: "#",
-      isExample: true,
-      status: "approved",
-      reviews: []
-    },
-    {
-      id: Date.now()+3,
-      name: "DesignFlow AI",
-      category: "Design",
-      description: "Create stunning graphics and logos",
-      problem: "designing graphics creating logos making images",
-      priceType: "paid",
-      price: 19,
-      rating: 4.7,
-      users: 75892,
-      isPremium: false,
-      creator: "DesignStudio",
-      createdAt: daysAgo(20),
-      features: ["Logo design","Social graphics","Brand kits","Templates"],
-      imageUrl: "",
-      url: "#",
-      paymentPlatform: "Lemon Squeezy",
-      affiliateLink: "#",
-      isExample: true,
-      status: "approved",
-      reviews: []
-    },
-    {
-      id: Date.now()+4,
-      name: "TaskFlow AI",
-      category: "Productivity",
-      description: "AI task management",
-      problem: "productivity task management organizing work",
-      priceType: "paid",
-      price: 15,
-      rating: 4.7,
-      users: 67123,
-      isPremium: false,
-      creator: "ProductivityCo",
-      createdAt: daysAgo(10),
-      features: ["Smart scheduling","Priority detection","Time tracking"],
-      imageUrl: "",
-      url: "#",
-      paymentPlatform: "ShareASale",
-      affiliateLink: "#",
-      isExample: true,
-      status: "approved",
-      reviews: []
-    }
-  ];
-
-  saveTools(seed);
-}
-
-/* =============== NAV AUTH (Hi, Name / Logout / Sign In) =============== */
-function renderNavAuth() {
-  const slot = document.getElementById("navAuth");
-  if (!slot) return;
-  const u = getCurrentUser();
-  if (u) {
-    slot.innerHTML = `
-      <span style="margin-left:8px;">Hi, ${u.name || u.email.split("@")[0]}${u.role==="admin" ? " (approver)" : ""}</span>
-      <button id="logoutBtn" class="btn outline" style="margin-left:8px;">Logout</button>
-    `;
-    const lb = document.getElementById("logoutBtn");
-    if (lb) lb.addEventListener("click", () => {
-      setCurrentUser(null);
-      renderNavAuth();
-      // optional redirect
-      if (document.body.getAttribute("data-page") !== "home") {
-        window.location.href = "index.html";
-      }
-    });
-  } else {
-    slot.innerHTML = `<a href="signup.html" class="btn">Sign In</a>`;
+/* ---------- Auth UI (navbar) ---------- */
+async function renderNavAuth(user){
+  const slot = $("navAuth"); if (!slot) return;
+  if (user){
+    const name = user.displayName || user.email;
+    slot.innerHTML = `<span class="nav-user">Hi, ${esc(name)}${user.email===ADMIN_EMAIL?' (approver)':''}${user.emailVerified?'':' — verify your email'}</span> <button id="logoutBtn" class="btn small">Logout</button>`;
+    $("adminLink") && ( $("adminLink").style.display = user.email===ADMIN_EMAIL ? "inline-block" : "none" );
+    $("logoutBtn")?.addEventListener("click", async ()=>{ await signOut(auth); location.href="index.html"; });
+  }else{
+    $("adminLink") && ( $("adminLink").style.display = "none" );
+    slot.innerHTML = `<a href="signup.html" class="btn small">Sign In</a>`;
   }
 }
 
-/* =============== AUTH PAGE (signup.html) =============== */
-/* This assumes the HTML from my last message. If IDs differ, adjust here. */
-function initSignupPage() {
-  if (document.body.getAttribute("data-page") !== "signup") return;
+function showVerifyBanner(user){
+  const b = $("verifyBanner");
+  if (!b) return;
+  if (user && !user.emailVerified){
+    b.style.display="block";
+    b.textContent = "Please verify your email (check your inbox). Some actions are locked until verification.";
+  }else{
+    b.style.display="none";
+  }
+}
 
-  const form = document.getElementById("authForm");
-  const nameWrap = document.getElementById("nameWrap");
-  const accountTypeWrap = document.getElementById("accountTypeWrap");
-  const nameInput = document.getElementById("nameInput");
-  const emailInput = document.getElementById("emailInput");
-  const passwordInput = document.getElementById("passwordInput");
-  const accountTypeSelect = document.getElementById("accountTypeSelect");
-  const btnLogin = document.getElementById("modeLogin");
-  const btnSignup = document.getElementById("modeSignup");
-  const errorEl = document.getElementById("authError");
-  const okEl = document.getElementById("authSuccess");
+/* ---------- SIGNUP PAGE ---------- */
+function initSignupPage(user){
+  if (document.body.getAttribute("data-page")!=="signup") return;
+
+  const modeLogin = $("modeLogin");
+  const modeSignup = $("modeSignup");
+  const nameWrap = $("nameWrap");
+  const accountTypeWrap = $("accountTypeWrap");
+  const authForm = $("authForm");
+  const nameInput = $("nameInput");
+  const emailInput = $("emailInput");
+  const passwordInput = $("passwordInput");
+  const accountTypeSelect = $("accountTypeSelect");
+  const err = $("authError");
+  const ok = $("authSuccess");
 
   let mode = "login";
-
-  function setMode(newMode) {
-    mode = newMode;
-    const isSignup = mode === "signup";
-    if (nameWrap) nameWrap.style.display = isSignup ? "block" : "none";
-    if (accountTypeWrap) accountTypeWrap.style.display = isSignup ? "block" : "none";
-    if (btnLogin) btnLogin.className = mode === "login" ? "btn" : "btn outline";
-    if (btnSignup) btnSignup.className = mode === "signup" ? "btn" : "btn outline";
-    if (errorEl) errorEl.style.display = "none";
-    if (okEl) okEl.style.display = "none";
-  }
-
+  const setMode = (m)=>{
+    mode = m;
+    nameWrap.style.display = m==="signup" ? "block" : "none";
+    accountTypeWrap.style.display = m==="signup" ? "block" : "none";
+    modeLogin.classList.toggle("active", m==="login");
+    modeSignup.classList.toggle("active", m==="signup");
+    err.style.display = "none"; ok.style.display = "none";
+  };
+  modeLogin.addEventListener("click", ()=>setMode("login"));
+  modeSignup.addEventListener("click", ()=>setMode("signup"));
   setMode("login");
 
-  if (btnLogin) btnLogin.addEventListener("click", () => setMode("login"));
-  if (btnSignup) btnSignup.addEventListener("click", () => setMode("signup"));
+  authForm.addEventListener("submit", async (e)=>{
+    e.preventDefault(); err.style.display="none"; ok.style.display="none";
+    const email = emailInput.value.trim().toLowerCase();
+    const pwd = passwordInput.value.trim();
 
-  if (form) {
-    form.addEventListener("submit", (e) => {
-      e.preventDefault();
-      if (errorEl) errorEl.style.display = "none";
-      if (okEl) okEl.style.display = "none";
+    try{
+      if (mode==="login"){
+        await signInWithEmailAndPassword(auth, email, pwd);
+        ok.textContent = "Signed in. Redirecting…"; ok.style.display="block";
+        setTimeout(()=>location.href="index.html", 400);
+      }else{
+        const name = nameInput.value.trim();
+        if (!name){ err.textContent="Enter your full name."; err.style.display="block"; return; }
+        const cred = await createUserWithEmailAndPassword(auth, email, pwd);
+        await updateProfile(cred.user, { displayName: name });
 
-      const email = (emailInput?.value || "").trim().toLowerCase();
-      const pwd = (passwordInput?.value || "").trim();
-
-      if (!email || !pwd) {
-        if (errorEl) { errorEl.textContent = "Please fill in email and password."; errorEl.style.display = "block"; }
-        return;
-      }
-
-      if (mode === "signup") {
-        const name = (nameInput?.value || "").trim();
-        const type = accountTypeSelect?.value || "user";
-        if (!name) {
-          if (errorEl) { errorEl.textContent = "Please enter your full name."; errorEl.style.display = "block"; }
-          return;
-        }
-        const users = getUsers();
-        if (users.some(u => u.email === email)) {
-          if (errorEl) { errorEl.textContent = "An account with this email already exists. Please sign in."; errorEl.style.display = "block"; }
-          return;
-        }
-        const role = (email === APPROVER_EMAIL) ? "admin" : "user";
-        const user = {
-          id: Date.now(),
-          name,
+        // Set a basic user profile doc (optional)
+        await setDoc(doc(db, "users", cred.user.uid), {
+          uid: cred.user.uid,
           email,
-          password: pwd, // demo only
-          role,
-          accountType: type,
-          joinedAt: new Date().toISOString()
-        };
-        users.push(user);
-        saveUsers(users);
-        setCurrentUser(user);
-        if (okEl) { okEl.textContent = "Account created. Redirecting…"; okEl.style.display = "block"; }
-        renderNavAuth();
-        setTimeout(() => { window.location.href = "index.html"; }, 600);
-        return;
+          name,
+          role: email===ADMIN_EMAIL ? "admin" : (accountTypeSelect.value||"user"),
+          createdAt: serverTimestamp()
+        });
+
+        // Send verification email
+        await sendEmailVerification(cred.user);
+        ok.textContent = "Account created. Check your email to verify, then sign in.";
+        ok.style.display="block";
       }
-
-      if (mode === "login") {
-        const users = getUsers();
-        const found = users.find(u => u.email === email && u.password === pwd);
-        if (!found) {
-          if (errorEl) { errorEl.textContent = "Wrong email or password."; errorEl.style.display = "block"; }
-          return;
-        }
-        setCurrentUser(found);
-        if (okEl) { okEl.textContent = "Signed in. Redirecting…"; okEl.style.display = "block"; }
-        renderNavAuth();
-        setTimeout(() => { window.location.href = "index.html"; }, 400);
-      }
-    });
-  }
-}
-
-/* =============== HOME PAGE (index.html) =============== */
-function calculateRating(tool) {
-  if (!tool.reviews || !tool.reviews.length) return tool.rating || 0;
-  const avg = tool.reviews.reduce((acc, r) => acc + Number(r.rating || 0), 0) / tool.reviews.length;
-  return Number(avg.toFixed(1));
-}
-
-function sortTrending(tools) {
-  // Recency + reviews (simple heuristic)
-  return [...tools].sort((a, b) => {
-    const daysA = (Date.now() - new Date(a.createdAt).getTime()) / 86400000;
-    const daysB = (Date.now() - new Date(b.createdAt).getTime()) / 86400000;
-    const scoreA = ((a.reviews?.length || 0) + 1) * 120 / (daysA + 2);
-    const scoreB = ((b.reviews?.length || 0) + 1) * 120 / (daysB + 2);
-    return scoreB - scoreA;
+    }catch(e2){
+      err.textContent = e2?.message || "Something went wrong.";
+      err.style.display = "block";
+    }
   });
 }
-function sortPopular(tools) {
-  return [...tools].sort((a,b) => (b.users||0) - (a.users||0));
-}
-function sortNew(tools) {
-  return [...tools].sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
-}
 
-function matchesSearch(tool, q) {
-  if (!q) return true;
-  const s = q.toLowerCase();
-  return (
-    tool.name?.toLowerCase().includes(s) ||
-    tool.category?.toLowerCase().includes(s) ||
-    tool.description?.toLowerCase().includes(s) ||
-    tool.problem?.toLowerCase().includes(s)
-  );
-}
-
-function toolCardHTML(t) {
-  const priceBadge = (t.priceType === "free") ? `<span class="price">Free</span>` : `<span class="price">$${t.price}/mo</span>`;
-  const exampleBadge = t.isExample ? `<span class="badge example">example</span>` : ``;
-  const premium = t.isPremium ? `<span class="badge premium">Premium</span>` : ``;
-  const img = t.imageUrl ? `<img src="${t.imageUrl}" alt="${t.name}" class="tool-img" />` : ``;
-  const rating = calculateRating(t);
-  const href = `tool.html?id=${encodeURIComponent(t.id)}`;
-
+/* ---------- HOMEPAGE ---------- */
+function toolCardHTML(t){
+  const priceText = t.priceType==="free" ? "Free" : `$${t.price||"?"}/mo`;
+  const exampleBadge = t.isExample ? `<span class="badge warn">Example</span>` : "";
+  const premiumBadge = t.isPremium ? `<span class="badge">Premium</span>` : "";
+  const img = t.imageUrl || "https://via.placeholder.com/800x400?text=AI+Tool";
+  const link = t.isExample ? "#" : `tool.html?id=${t.id}`;
   return `
     <div class="tool-card">
-      ${premium}
-      ${exampleBadge}
-      ${img}
-      <h3 class="tool-name">${t.name}</h3>
-      <div class="tool-desc">${t.description}</div>
-      <div class="tool-meta">
-        <span class="rating">⭐ ${rating} (${t.reviews?.length || 0})</span>
-        <span class="users">${(t.users/1000|0)}K+ users</span>
-      </div>
-      <div class="tool-bottom">
-        ${priceBadge}
-        <a class="btn primary" href="${href}">View</a>
+      <img src="${img}" alt="${esc(t.name)}"/>
+      <div class="tool-info">
+        <h3>${esc(t.name)} ${premiumBadge} ${exampleBadge}</h3>
+        <p>${esc(t.description)}</p>
+        <p class="meta">${esc(t.category)} • ${priceText}</p>
+        <a class="btn small" href="${link}">${t.isExample?'Preview':'View'}</a>
       </div>
     </div>
   `;
 }
 
-function renderHome() {
-  if (document.body.getAttribute("data-page") !== "home") return;
+function matchesSearch(t, q){
+  if (!q) return true;
+  q = q.toLowerCase();
+  return (t.name||"").toLowerCase().includes(q)
+      || (t.category||"").toLowerCase().includes(q)
+      || (t.description||"").toLowerCase().includes(q);
+}
 
-  const root = document.getElementById("homeRoot");
+async function renderHome(){
+  if (document.body.getAttribute("data-page")!=="home") return;
+
+  const root = $("homeRoot");
   if (!root) return;
 
-  const toolsAll = getTools().filter(t => t.status === "approved");
-  const searchInput = document.getElementById("searchInput");
+  // fetch approved tools
+  const toolsCol = collection(db, "tools");
+  // newest
+  let newest=[], popular=[], all=[];
+  try{
+    const newestSnap = await getDocs(query(toolsCol, where("status","==","approved"), orderBy("createdAt","desc"), limit(12)));
+    newest = newestSnap.docs.map(d=>d.data());
+  }catch{}
+  try{
+    const popularSnap = await getDocs(query(toolsCol, where("status","==","approved"), orderBy("usersCount","desc"), limit(12)));
+    popular = popularSnap.docs.map(d=>d.data());
+  }catch{}
+  try{
+    const allSnap = await getDocs(query(toolsCol, where("status","==","approved"), limit(50)));
+    all = allSnap.docs.map(d=>d.data());
+  }catch{}
 
-  function renderAll(q = "") {
-    const list = toolsAll.filter(t => matchesSearch(t, q));
-    const trending = sortTrending(list).slice(0, 8);
-    const popular = sortPopular(list).slice(0, 8);
-    const newest = sortNew(list).slice(0, 8);
+  // trending calc
+  const trending = [...all].sort((a,b)=>{
+    const daysA = a.createdAt?.toMillis ? (Date.now()-a.createdAt.toMillis())/86400000 : 999;
+    const daysB = b.createdAt?.toMillis ? (Date.now()-b.createdAt.toMillis())/86400000 : 999;
+    const scoreA = ((a.reviewsCount||0)+1)*120/(daysA+2) + (a.isPremium?50:0);
+    const scoreB = ((b.reviewsCount||0)+1)*120/(daysB+2) + (b.isPremium?50:0);
+    return scoreB - scoreA;
+  }).slice(0,12);
 
+  // If no real tools yet, show examples
+  const fallback = newest.length+popular.length+trending.length===0;
+
+  function draw(q=""){
+    const sourceAll = fallback ? EXAMPLE_TOOLS : all;
+    const filtered = q ? sourceAll.filter(t=>matchesSearch(t,q)) : [];
     root.innerHTML = `
-      <div class="hero">
-        <h1>Find your perfect AI tool</h1>
-        <p>Search by what you need, browse Trending / Popular / New.</p>
-        <div class="search-wrap">
-          <input id="searchInputLive" class="input" placeholder="Describe your problem… e.g. 'write product descriptions'">
-        </div>
-      </div>
-
-      ${q ? `<h2>Search Results (${list.length})</h2>` : ""}
-
-      ${q ? `
-        <div class="grid">
-          ${list.map(toolCardHTML).join("") || `<div class="empty">No results yet. Try a different query.</div>`}
-        </div>
-      ` : `
-        <section>
-          <div class="section-title"><h2>Trending</h2></div>
-          <div class="grid">${trending.map(toolCardHTML).join("")}</div>
+      ${q ? `<h2 class="section-heading">Search results (${filtered.length})</h2>
+        <div class="grid">${filtered.map(toolCardHTML).join("") || `<div class="muted">No results yet. Try a different query.</div>`}</div>`
+        : `
+        <section class="section">
+          <div class="section-title"><h2>New</h2></div>
+          <div class="grid">${(fallback?EXAMPLE_TOOLS: newest).map(toolCardHTML).join("")}</div>
         </section>
 
-        <section>
+        <section class="section">
           <div class="section-title"><h2>Most Popular</h2></div>
-          <div class="grid">${popular.map(toolCardHTML).join("")}</div>
+          <div class="grid">${(fallback?EXAMPLE_TOOLS: popular).map(toolCardHTML).join("")}</div>
         </section>
 
-        <section>
-          <div class="section-title"><h2>New Arrivals</h2></div>
-          <div class="grid">${newest.map(toolCardHTML).join("")}</div>
+        <section class="section">
+          <div class="section-title"><h2>Trending</h2></div>
+          <div class="grid">${(fallback?EXAMPLE_TOOLS: trending).map(toolCardHTML).join("")}</div>
         </section>
       `}
     `;
+  }
+  draw("");
 
-    const searchLive = document.getElementById("searchInputLive");
-    if (searchLive) {
-      searchLive.value = q;
-      searchLive.addEventListener("input", (e) => {
-        renderAll(e.target.value || "");
-      });
-      // Enter submits same handler
-      searchLive.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") {
-          e.preventDefault();
-          renderAll(searchLive.value || "");
-        }
-      });
+  const search = $("searchInputLive");
+  if (search){
+    search.addEventListener("input", e=>draw(e.target.value||""));
+    search.addEventListener("keydown", e=>{
+      if (e.key==="Enter"){ e.preventDefault(); draw(search.value||""); }
+    });
+  }
+}
+
+/* ---------- SUBMIT PAGE ---------- */
+function populatePlatforms(){
+  const sel = $("paymentPlatform");
+  if (!sel) return;
+  sel.innerHTML = ALLOWED_PAYMENT_PLATFORMS.map(p=>`<option value="${p}">${p}</option>`).join("");
+}
+
+function togglePriceBox(){
+  const wrap = $("priceValueWrap");
+  const type = $("toolPriceType");
+  if (wrap && type){
+    wrap.style.display = type.value==="paid" ? "block" : "none";
+  }
+}
+
+function mustBeVerified(user){
+  if (!user || !user.emailVerified){
+    alert("Please verify your email first (check your inbox), then sign in again.");
+    location.href="signup.html";
+    return true;
+  }
+  return false;
+}
+
+function initSubmitPage(user){
+  if (document.body.getAttribute("data-page")!=="submit") return;
+  if (!user){ alert("Please sign in first."); location.href="signup.html"; return; }
+  if (mustBeVerified(user)) return;
+
+  populatePlatforms();
+  togglePriceBox();
+  $("toolPriceType")?.addEventListener("change", togglePriceBox);
+
+  $("submitForm")?.addEventListener("submit", async (e)=>{
+    e.preventDefault();
+    const name = $("toolName").value.trim();
+    const category = $("toolCategory").value.trim();
+    const description = $("toolDescription").value.trim();
+    const priceType = $("toolPriceType").value;
+    const priceValue = priceType==="paid" ? Number($("toolPriceValue").value||0) : 0;
+    const url = $("toolUrl").value.trim();
+    const imageUrl = $("toolImageUrl").value.trim();
+    const paymentPlatform = $("paymentPlatform").value.trim();
+    const affiliateLink = $("affiliateLink").value.trim();
+
+    if (!name || !category || !description || !url){
+      alert("Please fill out name, category, description, and website link.");
+      return;
     }
-  }
 
-  // initial render using any existing search input on page
-  let initialQuery = "";
-  if (searchInput && searchInput.value) initialQuery = searchInput.value;
-  renderAll(initialQuery);
-}
-
-/* =============== SUBMIT PAGE (submit.html) =============== */
-function initSubmitPage() {
-  if (document.body.getAttribute("data-page") !== "submit") return;
-
-  const form = document.getElementById("submitForm");
-  const nameEl = document.getElementById("toolName");
-  const catEl = document.getElementById("toolCategory");
-  const descEl = document.getElementById("toolDescription");
-  const priceTypeEl = document.getElementById("toolPriceType");
-  const priceValueEl = document.getElementById("toolPriceValue");
-  const urlEl = document.getElementById("toolUrl");
-  const imgEl = document.getElementById("toolImageUrl");
-  const platformEl = document.getElementById("paymentPlatform");
-  const affiliateEl = document.getElementById("affiliateLink");
-  const noticeEl = document.getElementById("submitNotice");
-
-  // Populate platform options if select exists
-  if (platformEl && platformEl.tagName === "SELECT" && !platformEl.children.length) {
-    ALLOWED_PAYMENT_PLATFORMS.forEach(p => {
-      const opt = document.createElement("option");
-      opt.value = p;
-      opt.textContent = p;
-      platformEl.appendChild(opt);
-    });
-  }
-
-  if (form) {
-    form.addEventListener("submit", (e) => {
-      e.preventDefault();
-
-      const user = getCurrentUser();
-      if (!user) {
-        alert("Please sign in first.");
-        window.location.href = "signup.html";
-        return;
+    // If PAID, require platform + affiliate link; If FREE, do not require
+    if (priceType==="paid"){
+      if (!ALLOWED_PAYMENT_PLATFORMS.includes(paymentPlatform)){
+        alert("Choose a valid affiliate/payment platform."); return;
       }
+      if (!/^https?:\/\//i.test(affiliateLink)){
+        alert("Affiliate link must start with http/https."); return;
+      }
+    }
 
-      const name = (nameEl?.value || "").trim();
-      const category = (catEl?.value || "").trim();
-      const description = (descEl?.value || "").trim();
-      const priceType = (priceTypeEl?.value || "free").trim(); // "free" | "paid"
-      const price = priceType === "paid" ? Number(priceValueEl?.value || 0) : 0;
-      const url = (urlEl?.value || "").trim();
-      const imageUrl = (imgEl?.value || "").trim();
-      const paymentPlatform = (platformEl?.value || "").trim();
-      const affiliateLink = (affiliateEl?.value || "").trim();
-
-      if (!name || !category || !description || !url) {
-        alert("Please fill out name, category, description, and link.");
-        return;
-      }
-      if (priceType === "paid" && (!price || price < 0)) {
-        alert("Please enter a valid monthly price for paid tools.");
-        return;
-      }
-      if (!ALLOWED_PAYMENT_PLATFORMS.includes(paymentPlatform)) {
-        alert("Please choose a valid payment platform.");
-        return;
-      }
-      if (!/^https?:\/\//i.test(affiliateLink)) {
-        alert("Please include a valid affiliate link (must start with http or https).");
-        return;
-      }
-
-      const tools = getTools();
-      const newTool = {
-        id: Date.now(),
-        name,
-        category,
-        description,
-        problem: description.toLowerCase(), // keep it simple for search
-        priceType,
-        price,
-        rating: 0,
-        users: 0,
-        isPremium: false,
-        creator: user.name || user.email.split("@")[0],
-        createdAt: new Date().toISOString(),
-        features: [],
-        imageUrl,
-        url,
-        paymentPlatform,
-        affiliateLink,
-        isExample: false,
+    try{
+      const id = crypto.randomUUID();
+      await setDoc(doc(db,"tools",id), {
+        id,
+        name, category, description,
+        priceType, price: priceValue,
+        url, imageUrl,
+        paymentPlatform: priceType==="paid" ? paymentPlatform : null,
+        affiliateLink: priceType==="paid" ? affiliateLink : null,
         status: "pending",
+        ownerUid: user.uid,
         ownerEmail: user.email,
-        reviews: []
-      };
-
-      tools.push(newTool);
-      saveTools(tools);
-
-      if (noticeEl) noticeEl.textContent = "Submitted! Waiting for approval.";
+        createdAt: serverTimestamp(),
+        usersCount: 0,
+        reviewsCount: 0,
+        isExample: false,
+        isPremium: false
+      });
+      $("submitNotice").textContent = "Submitted! Waiting for approval.";
       alert("Submitted! Your AI is pending approval.");
-      window.location.href = "index.html";
-    });
-  }
-
-  // If admin is on submit page, optionally show pending list with approve buttons
-  const adminPanel = document.getElementById("pendingList");
-  const u = getCurrentUser();
-  if (adminPanel && u && u.role === "admin") {
-    const tools = getTools().filter(t => t.status === "pending");
-    adminPanel.innerHTML = `
-      <h3>Pending approvals (${tools.length})</h3>
-      <div class="list">
-        ${tools.map(t => `
-          <div class="pending-item">
-            <div>
-              <strong>${t.name}</strong> — <em>${t.category}</em><br/>
-              <small>by ${t.creator} · ${new Date(t.createdAt).toLocaleDateString()}</small>
-            </div>
-            <div class="actions">
-              <button class="btn small" data-approve="${t.id}">Approve</button>
-              <button class="btn outline small" data-reject="${t.id}">Reject</button>
-            </div>
-          </div>
-        `).join("") || `<div class="empty">No pending items.</div>`}
-      </div>
-    `;
-    adminPanel.addEventListener("click", (e) => {
-      const el = e.target;
-      if (!(el instanceof HTMLElement)) return;
-      const approveId = el.getAttribute("data-approve");
-      const rejectId = el.getAttribute("data-reject");
-      if (approveId) {
-        const all = getTools();
-        const idx = all.findIndex(t => String(t.id) === String(approveId));
-        if (idx >= 0) {
-          all[idx].status = "approved";
-          saveTools(all);
-          alert("Approved.");
-          location.reload();
-        }
-      }
-      if (rejectId) {
-        const all = getTools();
-        const idx = all.findIndex(t => String(t.id) === String(rejectId));
-        if (idx >= 0) {
-          all.splice(idx,1);
-          saveTools(all);
-          alert("Rejected & removed.");
-          location.reload();
-        }
-      }
-    });
-  }
+      location.href = "index.html";
+    }catch(err){
+      alert(err.message||"Submission failed.");
+    }
+  });
 }
 
-/* =============== TOOL DETAIL PAGE (tool.html) =============== */
-function initToolPage() {
-  if (document.body.getAttribute("data-page") !== "tool") return;
+/* ---------- ADMIN PAGE ---------- */
+async function initAdminPage(user){
+  if (document.body.getAttribute("data-page")!=="admin") return;
+  if (!user || user.email!==ADMIN_EMAIL){ alert("Not authorized."); location.href="index.html"; return; }
 
-  const root = document.getElementById("toolRoot");
-  if (!root) return;
+  const pendingList = $("pendingList");
+  const approvedList = $("approvedList");
 
-  const params = new URLSearchParams(location.search);
-  const id = params.get("id");
-  const all = getTools();
-  const tool = all.find(t => String(t.id) === String(id) && t.status === "approved");
+  // Pending
+  const pSnap = await getDocs(query(collection(db,"tools"), where("status","==","pending")));
+  const pending = pSnap.docs.map(d=>d.data());
+  pendingList.innerHTML = pending.length ? pending.map(t=>`
+    <div class="pending-item">
+      <div>
+        <strong>${esc(t.name)}</strong> — <em>${esc(t.category)}</em><br/>
+        <small>${esc(t.description)}</small><br/>
+        <small>${t.priceType==="free"?"Free":`$${t.price}/mo`} • ${esc(t.ownerEmail||"")}</small>
+      </div>
+      <div class="actions">
+        <button class="btn small" data-approve="${t.id}">Approve</button>
+        <button class="btn small outline" data-premium="${t.id}">Approve as Premium</button>
+        <button class="btn small danger" data-delete="${t.id}">Delete</button>
+      </div>
+    </div>
+  `).join("") : `<p class="muted">No pending submissions.</p>`;
 
-  if (!tool) {
-    root.innerHTML = `<div class="empty">Tool not found or not approved yet.</div>`;
-    return;
-  }
+  // Approved
+  const aSnap = await getDocs(query(collection(db,"tools"), where("status","==","approved")));
+  const approved = aSnap.docs.map(d=>d.data());
+  approvedList.innerHTML = approved.length ? approved.map(t=>`
+    <div class="approved-item">
+      <div>
+        <strong>${esc(t.name)}</strong> ${t.isPremium?'<span class="badge">Premium</span>':''} — <em>${esc(t.category)}</em><br/>
+        <small>${esc(t.description)}</small>
+      </div>
+      <div class="actions">
+        <button class="btn small danger" data-delete="${t.id}">Delete</button>
+      </div>
+    </div>
+  `).join("") : `<p class="muted">No approved tools yet.</p>`;
 
-  const rating = calculateRating(tool);
+  // Actions
+  const handler = async (e)=>{
+    const el = e.target;
+    if (!(el instanceof HTMLElement)) return;
+    const approveId = el.getAttribute("data-approve");
+    const premiumId = el.getAttribute("data-premium");
+    const deleteId = el.getAttribute("data-delete");
+
+    try{
+      if (approveId){
+        await updateDoc(doc(db,"tools",approveId), { status:"approved", isPremium:false });
+        alert("Approved."); location.reload();
+      }
+      if (premiumId){
+        await updateDoc(doc(db,"tools",premiumId), { status:"approved", isPremium:true });
+        alert("Approved as Premium."); location.reload();
+      }
+      if (deleteId){
+        await deleteDoc(doc(db,"tools",deleteId));
+        alert("Deleted."); location.reload();
+      }
+    }catch(err){ alert(err.message||"Action failed."); }
+  };
+  pendingList.addEventListener("click", handler);
+  approvedList.addEventListener("click", handler);
+}
+
+/* ---------- TOOL DETAIL + REVIEWS ---------- */
+async function initToolPage(user){
+  if (document.body.getAttribute("data-page")!=="tool") return;
+  const root = $("toolRoot"); if (!root) return;
+  const id = new URLSearchParams(location.search).get("id");
+  if (!id){ root.innerHTML = `<p class="muted">No tool id.</p>`; return; }
+
+  const snap = await getDoc(doc(db,"tools",id));
+  if (!snap.exists()){ root.innerHTML = `<p class="muted">Tool not found.</p>`; return; }
+  const t = snap.data();
+  if (t.status!=="approved"){ root.innerHTML = `<p class="muted">Tool not approved yet.</p>`; return; }
+
+  const img = t.imageUrl || "https://via.placeholder.com/800x400?text=AI+Tool";
+  $("verifyBanner") && showVerifyBanner(user);
 
   root.innerHTML = `
-    <div class="tool-detail">
-      <a href="index.html" class="back">← Back</a>
-      ${tool.isPremium ? `<span class="badge premium">Premium</span>` : ``}
-      ${tool.isExample ? `<span class="badge example">example</span>` : ``}
-      <h1>${tool.name}</h1>
-      <p class="muted">by ${tool.creator}</p>
-      <div class="summary">
-        ${tool.imageUrl ? `<img src="${tool.imageUrl}" alt="${tool.name}" class="detail-img" />` : ``}
-        <div class="summary-text">
-          <p>${tool.description}</p>
-          <div class="meta">
-            <span>⭐ ${rating} (${tool.reviews?.length || 0})</span>
-            <span>${tool.users?.toLocaleString?.() || 0} users</span>
-            <span>${tool.category}</span>
-          </div>
-          <div class="cta-row">
-            ${tool.priceType === "free" ? `<div class="price">Free</div>` : `<div class="price">$${tool.price}/mo</div>`}
-            <a class="btn primary" href="${tool.affiliateLink || tool.url}" target="_blank" rel="noopener">Go to tool</a>
-          </div>
+    <a class="back" href="index.html">← Back</a>
+    ${t.isPremium?`<span class="badge">Premium</span>`:""}
+    ${t.isExample?`<span class="badge warn">Example</span>`:""}
+    <h1>${esc(t.name)}</h1>
+    <p class="muted">Category: ${esc(t.category)}</p>
+    <div class="detail">
+      <img class="detail-img" src="${img}" alt="${esc(t.name)}" />
+      <div>
+        <p>${esc(t.description)}</p>
+        <p class="meta">${t.priceType==="free"?"Free":`$${t.price}/mo`} • ${t.usersCount||0} users</p>
+        <div class="actions" style="margin:8px 0 12px;">
+          <a class="btn primary" href="${esc(t.affiliateLink||t.url)}" target="_blank" rel="noopener">Go to tool</a>
         </div>
-      </div>
-
-      <section>
-        <h2>Reviews</h2>
-        <div id="reviewsWrap">
-          ${renderReviewsHTML(tool)}
-        </div>
-
-        <div id="addReviewWrap" class="add-review">
-          <h3>Write a review</h3>
+        <h3>Reviews</h3>
+        <div id="reviewsWrap"></div>
+        <div class="add-review">
           <form id="reviewForm">
             <label class="label">Rating (1–5)</label>
             <input id="reviewRating" class="input" type="number" min="1" max="5" value="5" required />
@@ -596,83 +402,52 @@ function initToolPage() {
             <button class="btn primary" type="submit">Submit Review</button>
           </form>
         </div>
-      </section>
+      </div>
     </div>
   `;
 
-  const form = document.getElementById("reviewForm");
-  if (form) {
-    form.addEventListener("submit", (e) => {
-      e.preventDefault();
-      const u = getCurrentUser();
-      if (!u) {
-        alert("Please sign in first.");
-        window.location.href = "signup.html";
-        return;
-      }
-      const ratingEl = document.getElementById("reviewRating");
-      const textEl = document.getElementById("reviewText");
-      const r = Number(ratingEl.value || 5);
-      const text = (textEl.value || "").trim();
-      if (!text) { alert("Please write a review."); return; }
+  await renderReviews(id);
 
-      const all2 = getTools();
-      const idx = all2.findIndex(t => String(t.id) === String(tool.id));
-      if (idx < 0) return;
+  $("reviewForm")?.addEventListener("submit", async (e)=>{
+    e.preventDefault();
+    if (!user){ alert("Please sign in first."); location.href="signup.html"; return; }
+    if (!user.emailVerified){ alert("Please verify your email first (check your inbox)."); return; }
+    const rating = Math.max(1, Math.min(5, Number($("reviewRating").value||5)));
+    const text = $("reviewText").value.trim(); if (!text){ alert("Write something."); return; }
 
-      const newReview = {
-        id: Date.now(),
-        userId: u.id,
-        userName: u.name || u.email.split("@")[0],
-        rating: Math.max(1, Math.min(5, r)),
-        text,
-        createdAt: new Date().toISOString(),
-        helpful: 0
-      };
-      all2[idx].reviews = [...(all2[idx].reviews || []), newReview];
-      saveTools(all2);
-
-      // re-render reviews
-      const wrap = document.getElementById("reviewsWrap");
-      if (wrap) wrap.innerHTML = renderReviewsHTML(all2[idx]);
-      form.reset();
-      ratingEl.value = 5;
+    const rid = crypto.randomUUID();
+    await setDoc(doc(db, "tools", id, "reviews", rid), {
+      id: rid,
+      userUid: user.uid,
+      userName: user.displayName || user.email,
+      rating, text,
+      createdAt: serverTimestamp()
     });
-  }
+    await updateDoc(doc(db,"tools",id), { reviewsCount: (t.reviewsCount||0)+1 });
+    $("reviewForm").reset();
+    await renderReviews(id);
+  });
 }
 
-function renderReviewsHTML(tool) {
-  const list = [...(tool.reviews || [])].sort((a,b) => b.helpful - a.helpful);
-  if (!list.length) return `<div class="empty">No reviews yet. Be the first!</div>`;
-  return `
-    <div class="reviews">
-      ${list.map(r => `
-        <div class="review">
-          <div class="review-top">
-            <strong>${r.userName}</strong>
-            <span>⭐ ${r.rating}</span>
-          </div>
-          <div class="review-date">${new Date(r.createdAt).toLocaleDateString()}</div>
-          <p>${escapeHTML(r.text)}</p>
-        </div>
-      `).join("")}
+async function renderReviews(id){
+  const wrap = $("reviewsWrap");
+  const rSnap = await getDocs(query(collection(db,"tools",id,"reviews"), orderBy("createdAt","desc")));
+  const list = rSnap.docs.map(d=>d.data());
+  wrap.innerHTML = list.length ? list.map(r=>`
+    <div class="review">
+      <div class="review-top"><strong>${esc(r.userName||"User")}</strong> • ⭐ ${r.rating}</div>
+      <p>${esc(r.text)}</p>
     </div>
-  `;
+  `).join("") : `<div class="muted">No reviews yet. Be the first!</div>`;
 }
 
-/* =============== UTILS =============== */
-function escapeHTML(s) {
-  return String(s).replace(/[&<>"']/g, (m)=>({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;" }[m]));
-}
-
-/* =============== BOOT =============== */
-document.addEventListener("DOMContentLoaded", () => {
-  maybeSeedTools();
-  renderNavAuth();
-  initSignupPage();
-  initSubmitPage();
-  renderHome();
-  initToolPage();
+/* ---------- BOOT ---------- */
+onAuthStateChanged(auth, async (user)=>{
+  await renderNavAuth(user);
+  showVerifyBanner(user);
+  initSignupPage(user);
+  initSubmitPage(user);
+  await renderHome();
+  await initAdminPage(user);
+  await initToolPage(user);
 });
-
-
